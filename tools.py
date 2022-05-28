@@ -6,10 +6,6 @@ from math import floor
 
 
 class Underlying_symbol_trade:
-    base_persent = 0.02
-    # base_persent = 0.002
-    stop_loss_price = 0.0
-    upgrade_stop_loss_price = False
 
     '主连合约交易类'
     def __init__(self, api, zhulian_symbol):
@@ -21,7 +17,12 @@ class Underlying_symbol_trade:
         self.position = api.get_position(self.underlying_symbol)
         self.target_pos = TargetPosTask(api, self.underlying_symbol)
 
-    def need_switch_contract(self):
+        self.base_persent = 0.02
+        self.stop_loss_price = 0.0
+        self.has_upgrade_stop_loss_price = False
+        self.volumes = 0
+
+    def __need_switch_contract(self):
         self.underlying_symbol = self.quote.underlying_symbol
         last_symbol_list = examine_symbol(self.last_symbol)
         today_symbol_list = examine_symbol(self.underlying_symbol)
@@ -35,24 +36,102 @@ class Underlying_symbol_trade:
         if self.underlying_symbol <= self.last_symbol:
             print('新合约非远月合约，不换月')
             return False
-        print(f"{tafunc.time_to_datetime(self.quote.datetime)},旧合约:{self.last_symbol},新合约:{self.underlying_symbol}")
+        print(f"{tafunc.time_to_datetime(self.quote.datetime)},\
+              旧合约:{self.last_symbol},新合约:{self.underlying_symbol}")
         return True
 
     def switch_contract(self):
-        if self.need_switch_contract():
-            last_position = self.api.get_position(self.last_symbol)
+        if self.__need_switch_contract():
+            last_position = self.position
             current_position = self.api.get_position(self.underlying_symbol)
-            if last_position.pos_long > 0:
-                last_target_pos = TargetPosTask(self.api, self.last_symbol)
-                current_target_pos = TargetPosTask(self.api,
-                                                   self.underlying_symbol)
+            last_pos_long = last_position.pos_long
+            last_target_pos = self.target_pos
+            current_target_pos = TargetPosTask(self.api,
+                                               self.underlying_symbol)
+            if last_pos_long > 0:
                 last_target_pos.set_target_volume(0)
-                current_target_pos.set_target_volume(last_position.pos_long)
-                print("换月完成:旧合约{
+                current_target_pos.set_target_volume(last_pos_long)
+                while True:
+                    self.api.wait_update()
+                    if last_position.pos_long == 0\
+                       and current_position.pos_long == last_pos_long:
+                        break
+                print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
+                      换月完成:旧合约{self.last_symbol},新合约{self.underlying_symbol},\
+                      换月前，多头{last_pos_long}手。换月后,多头{last_pos_long}手")
+            self.target_pos = current_target_pos
             self.last_symbol = self.underlying_symbol
-            return False
+            self.position = current_position
+            self.__set_stop_loss_price()
 
+    # 根据均线条件和是否有持仓判断是否可以开仓
+    def __can_open_volumes(self, daily_klines, m30_klines):
+        # 如果前一天日k线符合条件
+        if(is_match_daily_kline_condition(daily_klines.iloc[-1])):
+            if self.api.is_changing(m30_klines.iloc[-1], "datetime"):
+                calc_indicator(m30_klines)
+            last_30m_kline = m30_klines.iloc[-1]
+            if(is_match_30m_kline_condition(last_30m_kline)):
+                if self.position.pos_long == 0:
+                    # print(f"符合条件,准备下单\
+                    # {get_date_from_kline(m30_klines.iloc[-1])}")
+                    #    print(daily_klines.iloc[-1])
+                    #    print(last_30m_kline)
+                    return True
+        return False
 
+    def calc_volume_by_price(self, account):
+        available = account.balance*0.02
+        volumes = floor(available / self.quote.ask_price1)
+        # print(f'总资金：{account.balance}, 可用资金：{available}, 预计购入手数:{volumes}')
+        self.volumes = volumes
+        return volumes
+
+    # 挂止损单
+    def try_stop_loss(self):
+        if self.stop_loss_price \
+           and self.quote.last_price <= self.stop_loss_price\
+           and self.position.pos_long > 0:
+            self.target_pos.set_target_volume(0)
+            while True:
+                self.api.wait_update()
+                if self.position.pos_long == 0:
+                    break
+            print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
+                止损，现价:{self.quote.last_price}, 止损价:{self.stop_loss_price},\
+                手数:{self.position.pos_long}")
+            self.stop_loss_price = 0.0
+            self.has_upgrade_stop_loss_price = False
+
+    def open_volumes(self, daily_klines, m30_klines, account):
+        if self.__can_open_volumes(daily_klines, m30_klines):
+            wanted_volume = self.calc_volume_by_price(account)
+            self.target_pos.set_target_volume(wanted_volume)
+            while True:
+                self.api.wait_update()
+                if self.position.pos_long == wanted_volume:
+                    break
+            print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
+                  主力合约:{self.underlying_symbol},开仓价格{self.position.open_price_long},\
+                  多头{wanted_volume}手", end="-")
+            self.__set_stop_loss_price()
+            print(f"止损价格为:{self.stop_loss_price}")
+
+    def __set_stop_loss_price(self):
+        self.stop_loss_price = self.position.open_price_long\
+            * (1 - self.base_persent)
+        self.has_upgrade_stop_loss_price = False
+
+    def upgrade_stop_loss_price(self):
+        if (not self.has_upgrade_stop_loss_price
+            and self.quote.last_price >=
+                self.position.open_price_long * (1 + self.base_persent * 3)):
+            self.stop_loss_price = self.position.open_price_long \
+                * (1 + self.base_persent)
+            self.has_upgrade_stop_loss_price = True
+            print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
+                  主力合约:{self.underlying_symbol},现价{self.quote.last_price},\
+                  达到1:3盈亏比，止损提高至{self.stop_loss_price}")
 
 
 def is_zhulian_symbol(_symbol):
@@ -163,55 +242,3 @@ def is_match_30m_kline_condition(kline):
             if diff_persent <= 0.02:
                 return True
     return False
-
-
-def calc_volume_by_price(quote, account):
-    available = account.balance*0.02
-    volume = floor(available / quote.ask_price1)
-    print(f'总资金：{account.balance}, 可用资金：{available}, 预计购入手数:{volume}')
-    return volume
-
-
-def get_total_pos(position):
-    return position.pos_long_his + position.pos_log_today
-
-
-# 根据均线条件和是否有持仓判断是否可以开仓
-def can_open_volumes(api, daily_klines, m30_klines, position):
-    # 如果前一天日k线符合条件
-    if(is_match_daily_kline_condition(daily_klines.iloc[-1])):
-        if api.is_changing(m30_klines.iloc[-1], "datetime"):
-            calc_indicator(m30_klines)
-        last_30m_kline = m30_klines.iloc[-1]
-        if(is_match_30m_kline_condition(last_30m_kline)):
-            if position.pos_long == 0:
-                print(f"符合开仓条件，准备下单,时间{get_date_from_kline(m30_klines.iloc[-1])}")
-                print(daily_klines.iloc[-1])
-                print(last_30m_kline)
-                return True
-    return False
-
-
-# _api: tqsdk api, _last_symbol: 上一个主力合约代码, _today_symbol: 主连合约代码
-def need_switch_contract(_last_symbol, _today_symbol):
-    last_symbol_list = examine_symbol(_last_symbol)
-    today_symbol_list = examine_symbol(_today_symbol)
-    if not last_symbol_list or not today_symbol_list:
-        print('新/旧合约代码有误，请检验')
-        return False
-    if today_symbol_list[0] != last_symbol_list[0] or \
-            today_symbol_list[1] != last_symbol_list[1]:
-        print('新/旧合约品种不一，请检验')
-        return False
-    if _today_symbol <= _last_symbol:
-        print('新合约非远月合约，不换月')
-        return False
-    return True
-
-
-# _api: tqsdk api, _last_symbol: 上一个主力合约代码, _zhulian_symbol: 主连合约代码
-def switch_contract(_api, _last_symbol, _zhulian_symbol, _quote, _position):
-    _today_symbol = quote.underlying_symbol
-
-    if need_switch_contract(_last_symbol, _today_symbol):
-        return False

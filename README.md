@@ -8,12 +8,6 @@
 
 ```
 pipenv --python 3.9.
-pipenv install tqsdk
+pipenv install tqsdk  
 ```
-
-130696308-2012-20203324488
-
-202004130002
-
-  
 
