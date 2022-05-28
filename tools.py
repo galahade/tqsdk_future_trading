@@ -1,7 +1,58 @@
 import re
 from tqsdk.ta import EMA, MACD
+from tqsdk import tafunc, TargetPosTask
 from datetime import datetime
 from math import floor
+
+
+class Underlying_symbol_trade:
+    base_persent = 0.02
+    # base_persent = 0.002
+    stop_loss_price = 0.0
+    upgrade_stop_loss_price = False
+
+    '主连合约交易类'
+    def __init__(self, api, zhulian_symbol):
+        self.api = api
+        self.quote = api.get_quote(zhulian_symbol)
+        self.underlying_symbol = self.quote.underlying_symbol
+        self.last_symbol = self.underlying_symbol
+
+        self.position = api.get_position(self.underlying_symbol)
+        self.target_pos = TargetPosTask(api, self.underlying_symbol)
+
+    def need_switch_contract(self):
+        self.underlying_symbol = self.quote.underlying_symbol
+        last_symbol_list = examine_symbol(self.last_symbol)
+        today_symbol_list = examine_symbol(self.underlying_symbol)
+        if not last_symbol_list or not today_symbol_list:
+            print('新/旧合约代码有误，请检验')
+            return False
+        if today_symbol_list[0] != last_symbol_list[0] or \
+                today_symbol_list[1] != last_symbol_list[1]:
+            print('新/旧合约品种不一，请检验')
+            return False
+        if self.underlying_symbol <= self.last_symbol:
+            print('新合约非远月合约，不换月')
+            return False
+        print(f"{tafunc.time_to_datetime(self.quote.datetime)},旧合约:{self.last_symbol},新合约:{self.underlying_symbol}")
+        return True
+
+    def switch_contract(self):
+        if self.need_switch_contract():
+            last_position = self.api.get_position(self.last_symbol)
+            current_position = self.api.get_position(self.underlying_symbol)
+            if last_position.pos_long > 0:
+                last_target_pos = TargetPosTask(self.api, self.last_symbol)
+                current_target_pos = TargetPosTask(self.api,
+                                                   self.underlying_symbol)
+                last_target_pos.set_target_volume(0)
+                current_target_pos.set_target_volume(last_position.pos_long)
+                print("换月完成:旧合约{
+            self.last_symbol = self.underlying_symbol
+            return False
+
+
 
 
 def is_zhulian_symbol(_symbol):
@@ -159,8 +210,8 @@ def need_switch_contract(_last_symbol, _today_symbol):
 
 
 # _api: tqsdk api, _last_symbol: 上一个主力合约代码, _zhulian_symbol: 主连合约代码
-def switch_contract(_api, _last_symbol, _zhulian_symbol):
-    quote = _api.get_quote(symbol=_zhulian_symbol)
+def switch_contract(_api, _last_symbol, _zhulian_symbol, _quote, _position):
     _today_symbol = quote.underlying_symbol
 
-    #if need_switch_contract(_api, _last_symbol, _today_symbol):
+    if need_switch_contract(_last_symbol, _today_symbol):
+        return False
