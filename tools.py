@@ -22,6 +22,11 @@ class Underlying_symbol_trade:
         self.has_upgrade_stop_loss_price = False
         self.volumes = 0
 
+        self.daily_klines = api.get_kline_serial(zhulian_symbol, 60*60*24)
+        self.m30_klines = api.get_kline_serial(zhulian_symbol, 60*30)
+        calc_indicator(self.daily_klines)
+        calc_indicator(self.m30_klines)
+
     def __need_switch_contract(self):
         self.underlying_symbol = self.quote.underlying_symbol
         last_symbol_list = examine_symbol(self.last_symbol)
@@ -36,8 +41,8 @@ class Underlying_symbol_trade:
         if self.underlying_symbol <= self.last_symbol:
             print('新合约非远月合约，不换月')
             return False
-        print(f"{tafunc.time_to_datetime(self.quote.datetime)},\
-              旧合约:{self.last_symbol},新合约:{self.underlying_symbol}")
+        print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
+        print(f"旧合约:{self.last_symbol},新合约:{self.underlying_symbol}")
         return True
 
     def switch_contract(self):
@@ -56,34 +61,67 @@ class Underlying_symbol_trade:
                     if last_position.pos_long == 0\
                        and current_position.pos_long == last_pos_long:
                         break
-                print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
-                      换月完成:旧合约{self.last_symbol},新合约{self.underlying_symbol},\
-                      换月前，多头{last_pos_long}手。换月后,多头{last_pos_long}手")
+                print(f"{tafunc.time_to_datetime(self.quote.datetime)}",
+                      end='-')
+                print(f"换月完成:旧合约{self.last_symbol},新合约{self.underlying_symbol}",
+                      end='-')
+                print(f"换月前，多头{last_pos_long}手。换月后,多头{last_pos_long}手")
             self.target_pos = current_target_pos
             self.last_symbol = self.underlying_symbol
             self.position = current_position
             self.__set_stop_loss_price()
 
     # 根据均线条件和是否有持仓判断是否可以开仓
-    def __can_open_volumes(self, daily_klines, m30_klines):
-        # 如果前一天日k线符合条件
-        if(is_match_daily_kline_condition(daily_klines.iloc[-1])):
-            if self.api.is_changing(m30_klines.iloc[-1], "datetime"):
-                calc_indicator(m30_klines)
-            last_30m_kline = m30_klines.iloc[-1]
-            if(is_match_30m_kline_condition(last_30m_kline)):
+    def __can_open_volumes(self):
+        if(self.__is_match_daily_kline_condition()):
+            if(self.__is_match_30m_kline_condition()):
                 if self.position.pos_long == 0:
-                    # print(f"符合条件,准备下单\
-                    # {get_date_from_kline(m30_klines.iloc[-1])}")
-                    #    print(daily_klines.iloc[-1])
-                    #    print(last_30m_kline)
                     return True
         return False
+
+    # 判断是否满足30分钟线条件
+    def __is_match_30m_kline_condition(self):
+        kline = self.m30_klines.iloc[-2]
+        if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
+            if kline["ema22"] < kline["ema60"]:
+                diff_persent = abs(kline.close - kline.ema22)/kline.ema22
+                if diff_persent <= 0.02:
+                    return True
+            elif kline["ema22"] > kline["ema60"]:
+                diff_persent = abs(kline.close - kline.ema60)/kline.ema60
+                if diff_persent <= 0.02:
+                    return True
+        return False
+
+    # 判断是否满足日K线条件
+    def __is_match_daily_kline_condition(self):
+        # 如果id不足59，说明合约成交日还未满60天，ema60均线还不准确
+        # 故不能作为判断依据
+        kline = self.daily_klines.iloc[-2]
+        if kline.id > 58:
+            diff1 = diff_two_value(kline.ema60, kline.ema22)
+            diff2 = diff_two_value(kline.ema22, kline.ema60)
+            # EMA22 < EMA60， 且偏离度小于2时
+            if kline["ema22"] < kline["ema60"] and diff1 < 0.02:
+                # 收盘价格在EMA60均线上方
+                if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
+                    return True
+            elif kline["ema22"] > kline["ema60"]:
+                if diff2 < 0.02 and kline["close"] > kline["ema60"]:
+                    return True
+                elif (diff2 > 0.03 and
+                        ((kline["close"] > kline["ema60"] and
+                            kline["close"] < kline["ema22"]) and
+                            (kline["open"] > kline["ema60"] and
+                                kline["open"] < kline["ema22"]) and
+                            (diff_two_value(kline.close, kline.ema60) < 0.02))):
+                    return True
+        else:
+            return False
 
     def calc_volume_by_price(self, account):
         available = account.balance*0.02
         volumes = floor(available / self.quote.ask_price1)
-        # print(f'总资金：{account.balance}, 可用资金：{available}, 预计购入手数:{volumes}')
         self.volumes = volumes
         return volumes
 
@@ -97,29 +135,32 @@ class Underlying_symbol_trade:
                 self.api.wait_update()
                 if self.position.pos_long == 0:
                     break
-            print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
-                止损，现价:{self.quote.last_price}, 止损价:{self.stop_loss_price},\
-                手数:{self.position.pos_long}")
+            print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
+            print(f"止损,现价:{self.quote.last_price}, 止损价:{self.stop_loss_price}",
+                  end='-')
+            print(f"手数:{self.position.pos_long}")
             self.stop_loss_price = 0.0
             self.has_upgrade_stop_loss_price = False
 
-    def open_volumes(self, daily_klines, m30_klines, account):
-        if self.__can_open_volumes(daily_klines, m30_klines):
+    def open_volumes(self, account):
+        if self.__can_open_volumes():
             wanted_volume = self.calc_volume_by_price(account)
             self.target_pos.set_target_volume(wanted_volume)
             while True:
                 self.api.wait_update()
                 if self.position.pos_long == wanted_volume:
                     break
-            print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
-                  主力合约:{self.underlying_symbol},开仓价格{self.position.open_price_long},\
-                  多头{wanted_volume}手", end="-")
+            print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
+            print(f"合约:{self.underlying_symbol}", end='-')
+            print(f"开仓¥{self.position.open_price_long}", end='-')
+            print(f"多头{wanted_volume}手")
             self.__set_stop_loss_price()
-            print(f"止损价格为:{self.stop_loss_price}")
 
     def __set_stop_loss_price(self):
         self.stop_loss_price = self.position.open_price_long\
             * (1 - self.base_persent)
+        print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
+        print(f"止损为:{self.stop_loss_price}")
         self.has_upgrade_stop_loss_price = False
 
     def upgrade_stop_loss_price(self):
@@ -129,9 +170,10 @@ class Underlying_symbol_trade:
             self.stop_loss_price = self.position.open_price_long \
                 * (1 + self.base_persent)
             self.has_upgrade_stop_loss_price = True
-            print(f"{tafunc.time_to_datetime(self.quote.datetime)}-\
-                  主力合约:{self.underlying_symbol},现价{self.quote.last_price},\
-                  达到1:3盈亏比，止损提高至{self.stop_loss_price}")
+            print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
+            print(f"主力合约:{self.underlying_symbol},现价{self.quote.last_price}",
+                  end='-')
+            print(f"达到1:3盈亏比，止损提高至{self.stop_loss_price}")
 
 
 def is_zhulian_symbol(_symbol):
@@ -206,39 +248,5 @@ def diff_two_value(first, second):
     return abs(first - second)/second
 
 
-def is_match_daily_kline_condition(kline):
-    # 如果id不足59，说明合约成交日还未满60天，ema60均线还不准确
-    # 故不能作为判断依据
-    if kline.id > 58:
-        diff1 = diff_two_value(kline.ema60, kline.ema22)
-        diff2 = diff_two_value(kline.ema22, kline.ema60)
-        # EMA22 < EMA60， 且偏离度小于2时
-        if kline["ema22"] < kline["ema60"] and diff1 < 0.02:
-            # 收盘价格在EMA60均线上方
-            if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
-                return True
-        elif kline["ema22"] > kline["ema60"]:
-            if diff2 < 0.02 and kline["close"] > kline["ema60"]:
-                return True
-            elif (diff2 > 0.03 and
-                    ((kline["close"] > kline["ema60"] and
-                        kline["close"] < kline["ema22"]) and
-                        (kline["open"] > kline["ema60"] and
-                            kline["open"] < kline["ema22"]) and
-                        (diff_two_value(kline.close, kline.ema60) < 0.02))):
-                return True
-    else:
-        return False
 
 
-def is_match_30m_kline_condition(kline):
-    if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
-        if kline["ema22"] < kline["ema60"]:
-            diff_persent = abs(kline.close - kline.ema22)/kline.ema22
-            if diff_persent <= 0.02:
-                return True
-        elif kline["ema22"] > kline["ema60"]:
-            diff_persent = abs(kline.close - kline.ema60)/kline.ema60
-            if diff_persent <= 0.02:
-                return True
-    return False
