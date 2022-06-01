@@ -19,9 +19,29 @@ handlers:
     encoding: utf-8
 loggers:
   __main__:
-    level: INFO
+    level: DEBUG
     handlers: [console, file]
-    propagate: no
+    propagate: 0
+  TqApi:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+  TqApi.TqConnect:
+    level: WARNING
+    handlers: [console, file]
+    propagate: 0
+  TqApi.TqAuth:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+  TqApi.TqSim:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+  websockets:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
 root:
   level: DEBUG
   handlers: [console, file]

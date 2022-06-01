@@ -4,11 +4,13 @@ from tools import Underlying_symbol_trade, wait_to_trade
 import logging
 
 
-logger = logging.getLogger(__name__)
 acc = TqSim()
 
 
 def trade(start_year, end_year):
+    logger = logging.getLogger(__name__)
+    logger.debug(f"回测开始日期：{start_year}-01-01,\
+                  结束日期：{end_year}-12-31")
     try:
         api = TqApi(acc, web_gui=":10000",
                     backtest=TqBacktest(start_dt=date(start_year, 1, 1),
@@ -23,11 +25,12 @@ def trade(start_year, end_year):
         wait_to_trade(api, rb_trade)
 
     except BacktestFinished:
-    #    api.close()
+        logger.info("回测完成")
+        # api.close()
         # 打印回测的详细信息
         # print("trade log:", acc.trade_log)
 
         # 账户交易信息统计结果
         # print("tqsdk stat:", acc.tqsdk_stat)
-        while True:
-            api.wait_update()
+        # while True:
+        # api.wait_update()

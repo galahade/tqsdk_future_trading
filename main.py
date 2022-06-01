@@ -1,6 +1,7 @@
 from utils import common
 import sys
 import logging
+import backtest
 
 now = common.now
 is_back_test = False
@@ -14,12 +15,14 @@ def main():
         common.get_argumets()
         common.setup_log_config(log_level)
         logger = logging.getLogger(__name__)
-        logger.debug("This is a debug")
-        logger.info("This is a info")
+        if is_back_test:
+            logger.debug("开始进行回测")
+            backtest.trade(start_year, end_year)
+        else:
+            logger.debug("开始进行正式交易")
     except Exception as e:
         return str(e)
 
 
 if __name__ == "__main__":
-    print("run in main module")
     sys.exit(main())

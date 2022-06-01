@@ -1,4 +1,5 @@
 import re
+import logging
 from tqsdk.ta import EMA, MACD
 from tqsdk import tafunc, TargetPosTask
 from datetime import datetime
@@ -29,24 +30,24 @@ class Underlying_symbol_trade:
         calc_indicator(self.m30_klines)
 
     def __need_switch_contract(self):
+        logger = get_logger()
         self.underlying_symbol = self.quote.underlying_symbol
         last_symbol_list = examine_symbol(self.last_symbol)
         today_symbol_list = examine_symbol(self.underlying_symbol)
         if not last_symbol_list or not today_symbol_list:
-            print('新/旧合约代码有误，请检验')
+            logger.warning('新/旧合约代码有误，请检验')
             return False
         if today_symbol_list[0] != last_symbol_list[0] or \
                 today_symbol_list[1] != last_symbol_list[1]:
-            print('新/旧合约品种不一，请检验')
+            logger.warning('新/旧合约品种不一，请检验')
             return False
         if self.underlying_symbol <= self.last_symbol:
-            print('新合约非远月合约，不换月')
+            logger.warning('新合约非远月合约，不换月')
             return False
-        print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
-        print(f"旧合约:{self.last_symbol},新合约:{self.underlying_symbol}")
         return True
 
     def switch_contract(self):
+        logger = get_logger()
         if self.__need_switch_contract():
             last_position = self.position
             current_position = self.api.get_position(self.underlying_symbol)
@@ -62,11 +63,9 @@ class Underlying_symbol_trade:
                     if last_position.pos_long == 0\
                        and current_position.pos_long == last_pos_long:
                         break
-                print(f"{tafunc.time_to_datetime(self.quote.datetime)}",
-                      end='-')
-                print(f"换月完成:旧合约{self.last_symbol},新合约{self.underlying_symbol}",
-                      end='-')
-                print(f"换月前，多头{last_pos_long}手。换月后,多头{last_pos_long}手")
+                logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)},换月完成:旧合约{self.last_symbol},\
+新合约{self.underlying_symbol}")
+                logger.info(f"换月前，多头{last_pos_long}手。换月后,多头{last_pos_long}手")
             self.target_pos = current_target_pos
             self.last_symbol = self.underlying_symbol
             self.position = current_position
@@ -82,15 +81,22 @@ class Underlying_symbol_trade:
 
     # 判断是否满足30分钟线条件
     def __is_match_30m_kline_condition(self):
+        logger = get_logger()
         kline = self.m30_klines.iloc[-2]
         if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
             if kline["ema22"] < kline["ema60"]:
-                diff_persent = abs(kline.close - kline.ema22)/kline.ema22
+                diff_persent = diff_two_value(kline.close, kline.ema22)
                 if diff_persent <= 0.02:
+                    logger.debug(f"id:{kline.id}满足30分钟线条件1, ema22:{kline.ema22},\
+ema60:{kline.ema60}, 收盘价:{kline.close}, \
+MACD:{kline['MACD.close']}")
                     return True
             elif kline["ema22"] > kline["ema60"]:
-                diff_persent = abs(kline.close - kline.ema60)/kline.ema60
+                diff_persent = diff_two_value(kline.close, kline.ema60)
                 if diff_persent <= 0.02:
+                    logger.debug(f"id:{kline.id}满足30分钟线条件1, ema22:{kline.ema22},\
+ema60:{kline.ema60}, 收盘价:{kline.close}, \
+MACD:{kline['MACD.close']}")
                     return True
         return False
 
@@ -98,6 +104,7 @@ class Underlying_symbol_trade:
     def __is_match_daily_kline_condition(self):
         # 如果id不足59，说明合约成交日还未满60天，ema60均线还不准确
         # 故不能作为判断依据
+        logger = get_logger()
         kline = self.daily_klines.iloc[-2]
         if kline.id > 58:
             diff1 = diff_two_value(kline.ema60, kline.ema22)
@@ -106,16 +113,23 @@ class Underlying_symbol_trade:
             if kline["ema22"] < kline["ema60"] and diff1 < 0.02:
                 # 收盘价格在EMA60均线上方
                 if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
+                    logger.debug(f"id:{kline.id}满足日线条件1,\
+ema22:{kline.ema22},ema60:{kline.ema60}, 收盘价:{kline.close}")
                     return True
             elif kline["ema22"] > kline["ema60"]:
                 if diff2 < 0.02 and kline["close"] > kline["ema60"]:
+                    logger.debug(f"id:{kline.id}满足日线条件2.1,\
+ema22:{kline.ema22},ema60:{kline.ema60}, 收盘价:{kline.close}")
                     return True
                 elif (diff2 > 0.03 and
                         ((kline["close"] > kline["ema60"] and
                             kline["close"] < kline["ema22"]) and
                             (kline["open"] > kline["ema60"] and
                                 kline["open"] < kline["ema22"]) and
-                            (diff_two_value(kline.close, kline.ema60) < 0.02))):
+                            (diff_two_value(kline.close,
+                                            kline.ema60) < 0.02))):
+                    logger.debug(f"id:{kline.id}满足日线条件2.2,\
+ema22:{kline.ema22},ema60:{kline.ema60}, 收盘价:{kline.close}")
                     return True
         else:
             return False
@@ -128,6 +142,7 @@ class Underlying_symbol_trade:
 
     # 挂止损单
     def try_stop_loss(self):
+        logger = get_logger()
         if self.stop_loss_price \
            and self.quote.last_price <= self.stop_loss_price\
            and self.position.pos_long > 0:
@@ -136,14 +151,15 @@ class Underlying_symbol_trade:
                 self.api.wait_update()
                 if self.position.pos_long == 0:
                     break
-            print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
-            print(f"止损,现价:{self.quote.last_price}, 止损价:{self.stop_loss_price}",
-                  end='-')
-            print(f"手数:{self.position.pos_long}")
+            logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)}止损,\
+现价:{self.quote.last_price}, 止损价:{self.stop_loss_price} \
+手数:{self.position.pos_long}")
+            logger.debug(self.position)
             self.stop_loss_price = 0.0
             self.has_upgrade_stop_loss_price = False
 
     def open_volumes(self):
+        logger = get_logger()
         if self.__can_open_volumes():
             wanted_volume = self.calc_volume_by_price()
             self.target_pos.set_target_volume(wanted_volume)
@@ -151,30 +167,30 @@ class Underlying_symbol_trade:
                 self.api.wait_update()
                 if self.position.pos_long == wanted_volume:
                     break
-            print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
-            print(f"合约:{self.underlying_symbol}", end='-')
-            print(f"开仓¥{self.position.open_price_long}", end='-')
-            print(f"多头{wanted_volume}手")
+            logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)}\
+合约:{self.underlying_symbol} 开仓价{self.position.open_price_long}\
+多头{wanted_volume}手")
             self.__set_stop_loss_price()
 
     def __set_stop_loss_price(self):
+        logger = get_logger()
         self.stop_loss_price = self.position.open_price_long\
             * (1 - self.base_persent)
-        print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
-        print(f"止损为:{self.stop_loss_price}")
+        logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)}\
+设置止损价为:{self.stop_loss_price}")
         self.has_upgrade_stop_loss_price = False
 
     def upgrade_stop_loss_price(self):
+        logger = get_logger()
         if (not self.has_upgrade_stop_loss_price
             and self.quote.last_price >=
                 self.position.open_price_long * (1 + self.base_persent * 3)):
             self.stop_loss_price = self.position.open_price_long \
                 * (1 + self.base_persent)
             self.has_upgrade_stop_loss_price = True
-            print(f"{tafunc.time_to_datetime(self.quote.datetime)}", end='-')
-            print(f"主力合约:{self.underlying_symbol},现价{self.quote.last_price}",
-                  end='-')
-            print(f"达到1:3盈亏比，止损提高至{self.stop_loss_price}")
+            logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)} \
+主力合约:{self.underlying_symbol},现价{self.quote.last_price}\
+达到1:3盈亏比，止损提高至{self.stop_loss_price}")
 
 
 def is_zhulian_symbol(_symbol):
@@ -249,11 +265,20 @@ def diff_two_value(first, second):
     return abs(first - second)/second
 
 
+def get_logger():
+    return logging.getLogger(__name__)
+
+
+# 调用该方法执行交易策略，等待合适的交易时机进行交易。
+# api：天勤量化api对象，ust：主力合约交易对象
 def wait_to_trade(api, ust):
+    logger = get_logger()
+    logger.debug("准备开始交易，调用天勤接口，等待交易时机")
     while True:
         api.wait_update()
         # 处理更换主力合约问题
         if api.is_changing(ust.quote, "underlying_symbol"):
+            logger.info("平台主力合约已更换，开始切换程序主力合约")
             ust.switch_contract()
         if api.is_changing(ust.m30_klines.iloc[-1], "datetime"):
             calc_indicator(ust.m30_klines)
