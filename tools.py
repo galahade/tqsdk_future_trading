@@ -8,7 +8,7 @@ from math import floor
 class Underlying_symbol_trade:
 
     '主连合约交易类'
-    def __init__(self, api, zhulian_symbol):
+    def __init__(self, api, zhulian_symbol, account):
         self.api = api
         self.quote = api.get_quote(zhulian_symbol)
         self.underlying_symbol = self.quote.underlying_symbol
@@ -16,6 +16,7 @@ class Underlying_symbol_trade:
 
         self.position = api.get_position(self.underlying_symbol)
         self.target_pos = TargetPosTask(api, self.underlying_symbol)
+        self.account = account
 
         self.base_persent = 0.02
         self.stop_loss_price = 0.0
@@ -119,8 +120,8 @@ class Underlying_symbol_trade:
         else:
             return False
 
-    def calc_volume_by_price(self, account):
-        available = account.balance*0.02
+    def calc_volume_by_price(self):
+        available = self.account.balance*0.02
         volumes = floor(available / self.quote.ask_price1)
         self.volumes = volumes
         return volumes
@@ -142,9 +143,9 @@ class Underlying_symbol_trade:
             self.stop_loss_price = 0.0
             self.has_upgrade_stop_loss_price = False
 
-    def open_volumes(self, account):
+    def open_volumes(self):
         if self.__can_open_volumes():
-            wanted_volume = self.calc_volume_by_price(account)
+            wanted_volume = self.calc_volume_by_price()
             self.target_pos.set_target_volume(wanted_volume)
             while True:
                 self.api.wait_update()
@@ -248,5 +249,18 @@ def diff_two_value(first, second):
     return abs(first - second)/second
 
 
+def wait_to_trade(api, ust):
+    while True:
+        api.wait_update()
+        # 处理更换主力合约问题
+        if api.is_changing(ust.quote, "underlying_symbol"):
+            ust.switch_contract()
+        if api.is_changing(ust.m30_klines.iloc[-1], "datetime"):
+            calc_indicator(ust.m30_klines)
+        if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
+            calc_indicator(ust.daily_klines)
 
-
+        if api.is_changing(ust.quote, "last_price"):
+            ust.open_volumes()
+            ust.upgrade_stop_loss_price()
+            ust.try_stop_loss()

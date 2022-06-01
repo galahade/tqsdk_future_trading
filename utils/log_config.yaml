@@ -1,0 +1,27 @@
+version: 1
+formatters:
+  brief:
+    format: '%(levelname)-8s %(name)-15s %(message)s'
+  precise:
+    format: '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: brief
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: precise
+    filename: trade.log
+    mode: w
+    encoding: utf-8
+loggers:
+  __main__:
+    level: INFO
+    handlers: [console, file]
+    propagate: no
+root:
+  level: DEBUG
+  handlers: [console, file]

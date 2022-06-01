@@ -1,5 +1,6 @@
 from utils import common
-import sys, logging
+import sys
+import logging
 
 now = common.now
 is_back_test = False

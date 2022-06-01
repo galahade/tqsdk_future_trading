@@ -2,11 +2,16 @@ import argparse
 from datetime import date
 import sys
 import logging
+import logging.config
 import __main__
+import yaml
 
 now = date.today()
 
-
+'''
+在命令行中读取日志等级，是回测还是真实运行等配置，如果进行回测，需要指定
+回测开始年份，结束年份，默认为当前年份
+'''
 def get_argumets():
     _parser = argparse.ArgumentParser(prog="tqsdk_future_trade",
                                       description="使用天勤量化执行期货交易策略")
@@ -34,14 +39,13 @@ def get_argumets():
             __main__.start_year = args.start_year
             __main__.end_year = args.end_year
 
-
+'''
+根据命令行配置设置日志等级，如不指定，默认为warning
+'''
 def setup_log_config(log_level):
     numeric_level = getattr(logging, log_level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % log_level)
-    logging.basicConfig(level=numeric_level, encoding='utf-8',
-                        format='%(asctime)s %(levelname)s:%(message)s',
-                        datefmt='%Y.%m.%d-%I:%M:%S%p')
-    logger = logging.getLogger(__name__)
-    logger.debug("this is a debug")
-    logger.info("this is a info")
+    with open('utils/log_config.yaml', 'r') as f:
+        config = yaml.safe_load(f.read())
+        logging.config.dictConfig(config)
