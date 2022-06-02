@@ -25,9 +25,14 @@ class Underlying_symbol_trade:
         self.volumes = 0
 
         self.daily_klines = api.get_kline_serial(zhulian_symbol, 60*60*24)
+        self.h2_klines = api.get_kline_serial(zhulian_symbol, 60*60*2)
         self.m30_klines = api.get_kline_serial(zhulian_symbol, 60*30)
-        calc_indicator(self.daily_klines)
+        self.m5_klines = api.get_kline_serial(zhulian_symbol, 60*5)
+
+        calc_indicator(self.daily_klines, is_daily_kline=True)
         calc_indicator(self.m30_klines)
+        calc_indicator(self.h2_klines)
+        calc_indicator(self.m5_klines)
 
     def __need_switch_contract(self):
         logger = get_logger()
@@ -73,31 +78,50 @@ class Underlying_symbol_trade:
 
     # 根据均线条件和是否有持仓判断是否可以开仓
     def __can_open_volumes(self):
-        if(self.__is_match_daily_kline_condition()):
-            if(self.__is_match_30m_kline_condition()):
-                if self.position.pos_long == 0:
-                    return True
+        result = self.__is_match_daily_kline_condition()
+        if(result):
+            if self.__is_match_2h_kline_condition(result[-1]):
+                if(self.__is_match_30m_kline_condition()):
+                    if self.__is_match_5m_kline_condition():
+                        if self.position.pos_long == 0:
+                            return True
+        return False
+
+    def __is_match_5m_kline_condition(self):
+        logger = get_logger()
+        kline = self.m5_klines.iloc[-2]
+        diff = diff_two_value(kline.close, kline.ema60)
+        if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
+            if diff < 1.2:
+                logger.debug(f"id:{kline.id}满足5分钟线条件, ema60:{kline.ema60},\
+收盘价:{kline.close}, MACD:{kline['MACD.close']}, diff:{diff}")
+                return True
         return False
 
     # 判断是否满足30分钟线条件
     def __is_match_30m_kline_condition(self):
         logger = get_logger()
         kline = self.m30_klines.iloc[-2]
+        diff = diff_two_value(kline.close, kline.ema60)
         if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
-            if kline["ema22"] < kline["ema60"]:
-                diff_persent = diff_two_value(kline.close, kline.ema22)
-                if diff_persent <= 0.02:
-                    logger.debug(f"id:{kline.id}满足30分钟线条件1, ema22:{kline.ema22},\
-ema60:{kline.ema60}, 收盘价:{kline.close}, \
-MACD:{kline['MACD.close']}")
-                    return True
-            elif kline["ema22"] > kline["ema60"]:
-                diff_persent = diff_two_value(kline.close, kline.ema60)
-                if diff_persent <= 0.02:
-                    logger.debug(f"id:{kline.id}满足30分钟线条件1, ema22:{kline.ema22},\
-ema60:{kline.ema60}, 收盘价:{kline.close}, \
-MACD:{kline['MACD.close']}")
-                    return True
+            if diff < 1.2:
+                logger.debug(f"id:{kline.id}满足30分钟线条件, ema60:{kline.ema60},\
+收盘价:{kline.close}, MACD:{kline['MACD.close']}, diff:{diff}")
+                return True
+        return False
+
+    def __is_match_2h_kline_condition(self, num):
+        logger = get_logger()
+        kline = self.h2_klines.iloc[-2]
+        if num == 1 or num == 2 or num == 3:
+            if kline.close > kline.ema60:
+                logger.debug(f"id:{kline.id}满足2小时K线条件1, \
+ema60:{kline.ema60}, 收盘价:{kline.close}, MACD:{kline['MACD.close']}")
+                return True
+        elif num == 4:
+            logger.debug(f"id:{kline.id}满足2小时K线条件2, \
+ema60:{kline.ema60}, 收盘价:{kline.close}, MACD:{kline['MACD.close']}")
+            return True
         return False
 
     # 判断是否满足日K线条件
@@ -107,30 +131,34 @@ MACD:{kline['MACD.close']}")
         logger = get_logger()
         kline = self.daily_klines.iloc[-2]
         if kline.id > 58:
-            diff1 = diff_two_value(kline.ema60, kline.ema22)
-            diff2 = diff_two_value(kline.ema22, kline.ema60)
+            diff = diff_two_value(kline.ema9, kline.ema60)
             # EMA22 < EMA60， 且偏离度小于2时
-            if kline["ema22"] < kline["ema60"] and diff1 < 0.02:
+            if kline.ema22 < kline.ema60 and diff < 1:
                 # 收盘价格在EMA60均线上方
-                if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
-                    logger.debug(f"id:{kline.id}满足日线条件1,\
-ema22:{kline.ema22},ema60:{kline.ema60}, 收盘价:{kline.close}")
+                if kline.close > kline.ema60 and kline["MACD.close"] > 0:
+                    logger.debug(f"id:{kline.id}满足日线条件1,ema9:{kline.ema9}\
+ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}\
+MACD:{kline['MACD.close']}")
+                    return (True, 1)
+            elif kline.ema22 > kline.ema60:
+                if diff < 2 and kline.close > kline.ema60:
+                    logger.debug(f"id:{kline.id}满足日线条件2,ema9:{kline.ema9}\
+ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
+                    return (True, 2)
+                elif (diff > 2 and diff < 3
+                      and (kline.close > kline.ema60
+                           and kline.close < kline.ema22)):
+                    logger.debug(f"id:{kline.id}满足日线条件3,ema9:{kline.ema9}\
+ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
                     return True
-            elif kline["ema22"] > kline["ema60"]:
-                if diff2 < 0.02 and kline["close"] > kline["ema60"]:
-                    logger.debug(f"id:{kline.id}满足日线条件2.1,\
-ema22:{kline.ema22},ema60:{kline.ema60}, 收盘价:{kline.close}")
-                    return True
-                elif (diff2 > 0.03 and
-                        ((kline["close"] > kline["ema60"] and
-                            kline["close"] < kline["ema22"]) and
-                            (kline["open"] > kline["ema60"] and
-                                kline["open"] < kline["ema22"]) and
-                            (diff_two_value(kline.close,
-                                            kline.ema60) < 0.02))):
-                    logger.debug(f"id:{kline.id}满足日线条件2.2,\
-ema22:{kline.ema22},ema60:{kline.ema60}, 收盘价:{kline.close}")
-                    return True
+                    return (True, 3)
+                elif (diff > 3
+                      and (kline.close > kline.ema60
+                           and kline.close < kline.ema22)
+                      and (diff_two_value(kline.close, kline.ema60) < 2)):
+                    logger.debug(f"id:{kline.id}满足日线条件4,ema9:{kline.ema9}\
+ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
+                    return (True, 4)
         else:
             return False
 
@@ -222,6 +250,11 @@ def get_date_from_kline(kline):
     return datetime.fromtimestamp(kline.datetime/1e9)
 
 
+def calc_ema9(klines):
+    ema = EMA(klines, 9)
+    klines["ema9"] = ema.ema
+
+
 def calc_ema22(klines):
     ema22 = EMA(klines, 22)
     klines["ema22"] = ema22.ema
@@ -245,24 +278,27 @@ def calc_macd(klines):
     klines["dea"] = macd["dea"]
 
 
-def calc_indicator(klines):
+def calc_indicator(klines, is_daily_kline=False):
     calc_macd(klines)
     calc_ema22(klines)
     calc_ema60(klines)
-    klines["ema22.board"] = "MAIN"
-    klines["ema22.color"] = "red"
-    klines["ema60.board"] = "MAIN"
-    klines["ema60.color"] = "green"
-    klines["MACD.board"] = "MACD"
-    # 在 board=MACD 上添加 diff、dea 线
-    klines["diff.board"] = "MACD"
-    klines["diff.color"] = "gray"
-    klines["dea.board"] = "MACD"
-    klines["dea.color"] = "rgb(255,128,0)"
+    if is_daily_kline:
+        calc_ema9(klines)
+
+    # klines["ema22.board"] = "MAIN"
+    # klines["ema22.color"] = "red"
+    # klines["ema60.board"] = "MAIN"
+    # klines["ema60.color"] = "green"
+    # klines["MACD.board"] = "MACD"
+    # # 在 board=MACD 上添加 diff、dea 线
+    # klines["diff.board"] = "MACD"
+    # klines["diff.color"] = "gray"
+    # klines["dea.board"] = "MACD"
+    # klines["dea.color"] = "rgb(255,128,0)"
 
 
 def diff_two_value(first, second):
-    return abs(first - second)/second
+    return abs(first - second) / second * 100
 
 
 def get_logger():
@@ -280,10 +316,14 @@ def wait_to_trade(api, ust):
         if api.is_changing(ust.quote, "underlying_symbol"):
             logger.info("平台主力合约已更换，开始切换程序主力合约")
             ust.switch_contract()
-        if api.is_changing(ust.m30_klines.iloc[-1], "datetime"):
-            calc_indicator(ust.m30_klines)
         if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
             calc_indicator(ust.daily_klines)
+        if api.is_changing(ust.h2_klines.iloc[-1], "datetime"):
+            calc_indicator(ust.h2_klines)
+        if api.is_changing(ust.m30_klines.iloc[-1], "datetime"):
+            calc_indicator(ust.m30_klines)
+        if api.is_changing(ust.m5_klines.iloc[-1], "datetime"):
+            calc_indicator(ust.m5_klines)
 
         if api.is_changing(ust.quote, "last_price"):
             ust.open_volumes()
