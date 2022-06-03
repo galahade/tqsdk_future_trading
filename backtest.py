@@ -13,7 +13,7 @@ def trade(start_year, end_year):
                   结束日期：{end_year}-12-31")
     try:
         api = TqApi(acc, web_gui=":10000",
-                    backtest=TqBacktest(start_dt=date(start_year, 1, 1),
+                    backtest=TqBacktest(start_dt=date(start_year, 4, 1),
                                         end_dt=date(end_year, 12, 31)),
                     auth=TqAuth("galahade", "wombat-gazette-pillory"))
         # symbol = "SHFE.rb2210"

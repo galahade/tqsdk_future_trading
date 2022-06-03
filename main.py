@@ -21,6 +21,7 @@ def main():
         else:
             logger.debug("开始进行正式交易")
     except Exception as e:
+        logger.exception(e)
         return str(e)
 
 
