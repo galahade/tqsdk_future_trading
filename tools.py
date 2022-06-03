@@ -12,10 +12,8 @@ class Underlying_symbol_trade:
     def __init__(self, api, symbol, account):
         self.api = api
         self.quote = api.get_quote(symbol)
-        if is_zhulian_symbol(symbol):
-            self.underlying_symbol = self.quote.underlying_symbol
-        else:
-            self.underlying_symbol = symbol
+        self.underlying_symbol = self.quote.underlying_symbol
+        self.symbol = symbol
 
         self.position = api.get_position(self.underlying_symbol)
         self.target_pos = TargetPosTask(api, self.underlying_symbol)
@@ -40,7 +38,7 @@ class Underlying_symbol_trade:
     def __can_open_volumes(self):
         if self.position.pos_long == 0:
             result = self.__is_match_daily_kline_condition()
-            if(result):
+            if(result != 5):
                 if self.__is_match_2h_kline_condition(result):
                     if(self.__is_match_30m_kline_condition()):
                         if self.__is_match_5m_kline_condition():
@@ -54,8 +52,9 @@ class Underlying_symbol_trade:
         diff = diff_two_value(kline.close, kline.ema60)
         if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
             if diff < 1.2:
-                logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足5分钟线条件, ema60:{kline.ema60},\
-收盘价:{kline.close}, MACD:{kline['MACD.close']}, diff:{diff}")
+                logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足5分钟线条件,ema60:{kline.ema60},收盘:{kline.close},\
+MACD:{kline['MACD.close']},diff:{diff}")
                 return True
         return False
 
@@ -64,26 +63,39 @@ class Underlying_symbol_trade:
         logger = get_logger()
         kline = self.m30_klines.iloc[-2]
         diff = diff_two_value(kline.close, kline.ema60)
+        if kline["qualified"]:
+            return True
         if kline["close"] > kline["ema60"] and kline["MACD.close"] > 0:
             if diff < 1.2:
-                logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足30分钟线条件,ema60:{kline.ema60},\
-收盘价:{kline.close}, MACD:{kline['MACD.close']}, diff:{diff}")
+                logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足30分钟线条件,ema60:{kline.ema60},收盘:{kline.close},\
+MACD:{kline['MACD.close']}, diff:{diff}")
+                self.m30_klines.loc[self.m30_klines.id == kline.id,
+                                    'qualified'] = 1
                 return True
         return False
 
     def __is_match_2h_kline_condition(self, num):
         logger = get_logger()
         kline = self.h2_klines.iloc[-2]
+        if kline["qualified"]:
+            return True
         if num == 1 or num == 2 or num == 4:
             if kline.close > kline.ema60 or kline["MACD.close"] > 0:
-                logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}\
-满足2小时K线条件1, ema60:{kline.ema60}, 收盘:{kline.close}, MACD:{kline['MACD.close']}")
+                logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足两小时线条件1,ema60:{kline.ema60},收盘:{kline.close},\
+MACD:{kline['MACD.close']}")
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   'qualified'] = 1
                 return True
         elif num == 3:
             if kline["MACD.close"] > 0 and kline.close > kline.ema60\
                and diff_two_value(kline.ema9, kline.ema60) < 1.2:
-                logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足2小时K线条件2, \
-ema60:{kline.ema60}, 收盘价:{kline.close}, MACD:{kline['MACD.close']}")
+                logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足两小时线条件2,ema60:{kline.ema60},收盘:{kline.close},\
+MACD:{kline['MACD.close']}")
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   'qualified'] = 1
                 return True
         return False
 
@@ -93,35 +105,51 @@ ema60:{kline.ema60}, 收盘价:{kline.close}, MACD:{kline['MACD.close']}")
         # 故不能作为判断依据
         logger = get_logger()
         kline = self.daily_klines.iloc[-2]
-        if kline.id > 58:
+        # logger.info(kline)
+        if kline["qualified"]:
+            return kline["qualified"]
+        elif kline.id > 58:
             diff = diff_two_value(kline.ema9, kline.ema60)
             if kline.ema22 < kline.ema60 and diff < 1:
                 # 收盘价格在EMA60均线上方
                 if kline.close > kline.ema60 and kline["MACD.close"] > 0:
-                    logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足日线条件1,ema9:{kline.ema9}\
-ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}\
-MACD:{kline['MACD.close']}")
+                    logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足日线条件1,ema9:{kline.ema9},ema22:{kline.ema22},ema60:{kline.ema60},\
+收盘价:{kline.close},diff:{diff},MACD:{kline['MACD.close']}")
+                    self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                          'qualified'] = 1
                     return 1
             elif kline.ema22 > kline.ema60:
                 if diff < 2 and kline.close > kline.ema60:
-                    logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足日线条件2,ema9:{kline.ema9}\
-ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
+                    logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足日线条件2,ema9:{kline.ema9},ema22:{kline.ema22},ema60:{kline.ema60},\
+收盘价:{kline.close},diff:{diff}")
+                    self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                          'qualified'] = 2
                     return 2
                 elif (diff > 2 and diff < 3
                       and (kline.close > kline.ema60
                            and kline.close < kline.ema22)):
-                    logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足日线条件3,ema9:{kline.ema9}\
-ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
+                    logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足日线条件3,ema9:{kline.ema9},ema22:{kline.ema22},ema60:{kline.ema60},\
+收盘价:{kline.close},diff:{diff}")
+                    self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                          'qualified'] = 3
                     return 3
                 elif (diff > 3
                       and (kline.close > kline.ema60
                            and kline.close < kline.ema22)
                       and (diff_two_value(kline.close, kline.ema60) < 2)):
-                    logger.debug(f"{tafunc.time_to_datetime(self.quote.datetime)}满足日线条件4,ema9:{kline.ema9}\
-ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
+                    logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足日线条件4,ema9:{kline.ema9},ema22:{kline.ema22},ema60:{kline.ema60},\
+收盘价:{kline.close},diff:{diff}")
+                    self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                          'qualified'] = 4
                     return 4
         else:
-            return False
+            self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                  'qualified'] = 5
+            return 5
 
     def calc_volume_by_price(self):
         available = self.account.balance*0.02
@@ -132,18 +160,18 @@ ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
     # 挂止损单
     def try_stop_loss(self):
         logger = get_logger()
-        if self.stop_loss_price \
+        position_log = self.position.pos_long
+        if position_log > 0\
            and self.quote.last_price <= self.stop_loss_price\
-           and self.position.pos_long > 0:
+           and self.stop_loss_price:
             self.target_pos.set_target_volume(0)
             while True:
                 self.api.wait_update()
                 if self.position.pos_long == 0:
                     break
-            logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)}止损,\
+            logger.info(f"{get_date_str(self.quote.datetime)}止损,\
 现价:{self.quote.last_price}, 止损价:{self.stop_loss_price} \
-手数:{self.position.pos_long}")
-            logger.debug(self.position)
+手数:{position_log}")
             self.stop_loss_price = 0.0
             self.has_upgrade_stop_loss_price = False
 
@@ -156,30 +184,36 @@ ema22:{kline.ema22},ema60:{kline.ema60},收盘价:{kline.close},diff:{diff}")
                 self.api.wait_update()
                 if self.position.pos_long == wanted_volume:
                     break
-            logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)}\
+            logger.info(f"{get_date_str(self.quote.datetime)}\
 合约:{self.underlying_symbol} 开仓价{self.position.open_price_long}\
 多头{wanted_volume}手")
             self.set_stop_loss_price()
 
     def set_stop_loss_price(self):
         logger = get_logger()
-        self.stop_loss_price = self.position.open_price_long\
-            * (1 - self.base_persent)
-        logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)}\
-设置止损价为:{self.stop_loss_price}")
-        self.has_upgrade_stop_loss_price = False
+        if self.position.pos_long:
+            self.stop_loss_price = self.position.open_price_long\
+                * (1 - self.base_persent)
+            logger.info(f"{get_date_str(self.quote.datetime)}\
+止损为:{self.stop_loss_price}")
+            self.has_upgrade_stop_loss_price = False
 
     def upgrade_stop_loss_price(self):
         logger = get_logger()
         if (not self.has_upgrade_stop_loss_price
+            and self.position.pos_long > 0
             and self.quote.last_price >=
-                self.position.open_price_long * (1 + self.base_persent * 3)):
+                self.position.open_price_long * (1 + self.base_persent * 2)):
             self.stop_loss_price = self.position.open_price_long \
                 * (1 + self.base_persent)
             self.has_upgrade_stop_loss_price = True
-            logger.info(f"{tafunc.time_to_datetime(self.quote.datetime)} \
-主力合约:{self.underlying_symbol},现价{self.quote.last_price}\
-达到1:3盈亏比，止损提高至{self.stop_loss_price}")
+            logger.info(f"{get_date_str(self.quote.datetime)} \
+合约:{self.underlying_symbol},现价{self.quote.last_price}\
+达到1:2盈亏比，止损提高至{self.stop_loss_price}")
+
+
+def get_date_str(float_value):
+    return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def is_zhulian_symbol(_symbol):
@@ -245,6 +279,8 @@ def calc_indicator(klines, is_daily_kline=False):
     calc_ema60(klines)
     calc_ema9(klines)
 
+    klines["qualified"] = 0
+
     klines["ema22.board"] = "MAIN"
     klines["ema22.color"] = "red"
     klines["ema60.board"] = "MAIN"
@@ -290,21 +326,31 @@ def switch_contract(ust, api):
     # 获取最新主力合约
     underlying_symbol = ust.quote.underlying_symbol
     if __need_switch_contract(ust.underlying_symbol, underlying_symbol):
-        logger.debug(underlying_symbol)
-        new_ust = Underlying_symbol_trade(api, underlying_symbol, ust.account)
+        new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account)
         last_pos_long = ust.position.pos_long
+        diff = diff_two_value(new_ust.daily_klines.iloc[-2].ema9,
+                              new_ust.daily_klines.iloc[-2].ema60)
         if last_pos_long > 0:
-            ust.target_pos.set_target_volume(0)
-            new_ust.target_pos.set_target_volume(last_pos_long)
+            if diff < 6:
+                ust.target_pos.set_target_volume(0)
+                new_ust.target_pos.set_target_volume(last_pos_long)
+            else:
+                ust.target_pos.set_target_volume(0)
             while True:
                 api.wait_update()
-                if ust.position.pos_long == 0\
-                   and new_ust.position.pos_long == last_pos_long:
+                if diff < 6:
+                    if ust.position.pos_long == 0\
+                       and new_ust.position.pos_long == last_pos_long:
+                        logger.info(f"{get_date_str(ust.quote.datetime)}\
+换月买入:换月前-多头{last_pos_long}手 换月后-多头{last_pos_long}手")
+                        new_ust.set_stop_loss_price()
+                        break
+                elif ust.position.pos_long == 0:
+                    logger.info(f"{get_date_str(ust.quote.datetime)} \
+换月平仓:换月前-多头{last_pos_long}手 换月后-多头{new_ust.position.pos_long}手")
                     break
-            logger.info(f"{tafunc.time_to_datetime(ust.quote.datetime)},换月完成:旧合约{ust.underlying_symbol},\
+            logger.info(f"{get_date_str(ust.quote.datetime)}换月完成:旧合约{ust.underlying_symbol},\
 新合约{new_ust.underlying_symbol}")
-            logger.info(f"换月前，多头{last_pos_long}手。换月后,多头{last_pos_long}手")
-            new_ust.set_stop_loss_price()
             return new_ust
     return ust
 
@@ -318,7 +364,7 @@ def wait_to_trade(api, ust):
         api.wait_update()
         # 处理更换主力合约问题
         if api.is_changing(ust.quote, "underlying_symbol"):
-            logger.info("平台主力合约已更换，开始切换程序主力合约")
+            logger.info(f"{get_date_str(ust.quote.datetime)}平台主力合约已更换,切换主力合约")
             ust = switch_contract(ust, api)
         if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
             calc_indicator(ust.daily_klines)
