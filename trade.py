@@ -1,9 +1,44 @@
-import re
 import logging
-from tqsdk.ta import EMA, MACD
-from tqsdk import tafunc, TargetPosTask
-from datetime import datetime
+from tqsdk import TargetPosTask
 from math import floor
+from utils.tools import calc_indicator, diff_two_value, get_date_str
+
+
+def get_logger():
+    return logging.getLogger(__name__)
+
+
+class Trade_status:
+
+    def __init__(self, is_trading, position):
+        self.is_trading = is_trading
+        self.daily_condition = 0
+        self.position = position
+
+    def get_long_volumes(self):
+        return self.position.pos_long
+
+    def set_daily_condition(self, num):
+        self.__daily_condition = num
+
+    def set_daily_kline(self, kline):
+        self.__daily_kline = kline
+
+    def set_h2_kline(self, kline):
+        self.__h2_kline = kline
+
+    def set_m30_kline(self, kline):
+        self.__m30_kline = kline
+
+    def make_a_deal(self):
+        logger = get_logger()
+        if self.is_trading:
+            logger.debug("无法创建新交易状态，交易进行中")
+            return False
+        if (not self.daily_condition or not self.__daily_kline or
+           not self.__h2_kline or not self.__m30_kline):
+            logger.debug("创建交易状态失败, 日线条件或K线没有正确设置")
+            return False
 
 
 class Underlying_symbol_trade:
@@ -210,172 +245,3 @@ MACD:{kline['MACD.close']}")
             logger.info(f"{get_date_str(self.quote.datetime)} \
 合约:{self.underlying_symbol},现价{self.quote.last_price}\
 达到1:2盈亏比，止损提高至{self.stop_loss_price}")
-
-
-def get_date_str(float_value):
-    return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def is_zhulian_symbol(_symbol):
-    pattern = re.compile(r'^(KQ.m@)(CFFEX|CZCE|DCE|INE|SHFE).(\w{1,2})$')
-    return pattern.match(_symbol)
-
-
-def examine_symbol(_symbol):
-    pattern_dict_normal = {
-        'CFFEX': re.compile(r'^(CFFEX).([A-Z]{1,2})(\d{4})$'),
-        'CZCE': re.compile(r'^(CZCE).([A-Z]{2})(\d{3})$'),
-        'DCE': re.compile(r'^(DCE).([a-z]{1,2})(\d{4})$'),
-        'INE': re.compile(r'^(INE).([a-z]{2})(\d{4})$'),
-        'SHFE': re.compile(r'^(SHFE).([a-z]{2})(\d{4})$'),
-        # 'KQ.m': re.compile(r'^(KQ.m@)(CFFEX|CZCE|DCE|INE|SHFE).(\w{1,2})$')
-        }
-
-    for k, ipattern in pattern_dict_normal.items():
-        matchsymbol = ipattern.match(_symbol)
-        if matchsymbol:
-            exchange, variety, expiry_month = \
-                matchsymbol.group(1), matchsymbol.group(2), \
-                matchsymbol.group(3)
-            return [exchange, variety, expiry_month]
-    return False
-
-
-def get_date_from_kline(kline):
-    return datetime.fromtimestamp(kline.datetime/1e9)
-
-
-def calc_ema9(klines):
-    ema = EMA(klines, 9)
-    klines["ema9"] = ema.ema
-
-
-def calc_ema22(klines):
-    ema22 = EMA(klines, 22)
-    klines["ema22"] = ema22.ema
-
-
-def calc_ema60(klines):
-    ema60 = EMA(klines, 60)
-    klines["ema60"] = ema60.ema
-
-
-def calc_macd(klines):
-    macd = MACD(klines, 12, 24, 4)
-    # 用 K 线图模拟 MACD 指标柱状图
-    klines["MACD.open"] = 0.0
-    klines["MACD.close"] = macd["bar"]
-    klines["MACD.high"] = klines["MACD.close"].where(
-        klines["MACD.close"] > 0, 0)
-    klines["MACD.low"] = klines["MACD.close"].where(
-        klines["MACD.close"] < 0, 0)
-    klines["diff"] = macd["diff"]
-    klines["dea"] = macd["dea"]
-
-
-def calc_indicator(klines, is_daily_kline=False):
-    calc_macd(klines)
-    calc_ema22(klines)
-    calc_ema60(klines)
-    calc_ema9(klines)
-
-    klines["qualified"] = 0
-
-    klines["ema22.board"] = "MAIN"
-    klines["ema22.color"] = "red"
-    klines["ema60.board"] = "MAIN"
-    klines["ema60.color"] = "green"
-    klines["ema9.board"] = "MAIN"
-    klines["ema9.color"] = "blue"
-
-    klines["MACD.board"] = "MACD"
-    # 在 board=MACD 上添加 diff、dea 线
-    klines["diff.board"] = "MACD"
-    klines["diff.color"] = "gray"
-    klines["dea.board"] = "MACD"
-    klines["dea.color"] = "rgb(255,128,0)"
-
-
-def diff_two_value(first, second):
-    return abs(first - second) / second * 100
-
-
-def get_logger():
-    return logging.getLogger(__name__)
-
-
-def __need_switch_contract(last_symbol, underlying_symbol):
-    logger = get_logger()
-    last_symbol_list = examine_symbol(last_symbol)
-    today_symbol_list = examine_symbol(underlying_symbol)
-    if not last_symbol_list or not today_symbol_list:
-        logger.warning('新/旧合约代码有误，请检验')
-        return False
-    if today_symbol_list[0] != last_symbol_list[0] or \
-            today_symbol_list[1] != last_symbol_list[1]:
-        logger.warning('新/旧合约品种不一，请检验')
-        return False
-    if underlying_symbol <= last_symbol:
-        logger.warning('新合约非远月合约，不换月')
-        return False
-    return True
-
-
-def switch_contract(ust, api):
-    logger = get_logger()
-    # 获取最新主力合约
-    underlying_symbol = ust.quote.underlying_symbol
-    if __need_switch_contract(ust.underlying_symbol, underlying_symbol):
-        new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account)
-        last_pos_long = ust.position.pos_long
-        diff = diff_two_value(new_ust.daily_klines.iloc[-2].ema9,
-                              new_ust.daily_klines.iloc[-2].ema60)
-        if last_pos_long > 0:
-            if diff < 6:
-                ust.target_pos.set_target_volume(0)
-                new_ust.target_pos.set_target_volume(last_pos_long)
-            else:
-                ust.target_pos.set_target_volume(0)
-            while True:
-                api.wait_update()
-                if diff < 6:
-                    if ust.position.pos_long == 0\
-                       and new_ust.position.pos_long == last_pos_long:
-                        logger.info(f"{get_date_str(ust.quote.datetime)}\
-换月买入:换月前-多头{last_pos_long}手 换月后-多头{last_pos_long}手")
-                        new_ust.set_stop_loss_price()
-                        break
-                elif ust.position.pos_long == 0:
-                    logger.info(f"{get_date_str(ust.quote.datetime)} \
-换月平仓:换月前-多头{last_pos_long}手 换月后-多头{new_ust.position.pos_long}手")
-                    break
-            logger.info(f"{get_date_str(ust.quote.datetime)}换月完成:旧合约{ust.underlying_symbol},\
-新合约{new_ust.underlying_symbol}")
-            return new_ust
-    return ust
-
-
-# 调用该方法执行交易策略，等待合适的交易时机进行交易。
-# api：天勤量化api对象，ust：主力合约交易对象
-def wait_to_trade(api, ust):
-    logger = get_logger()
-    logger.debug("准备开始交易，调用天勤接口，等待交易时机")
-    while True:
-        api.wait_update()
-        # 处理更换主力合约问题
-        if api.is_changing(ust.quote, "underlying_symbol"):
-            logger.info(f"{get_date_str(ust.quote.datetime)}平台主力合约已更换,切换主力合约")
-            ust = switch_contract(ust, api)
-        if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
-            calc_indicator(ust.daily_klines)
-        if api.is_changing(ust.h2_klines.iloc[-1], "datetime"):
-            calc_indicator(ust.h2_klines)
-        if api.is_changing(ust.m30_klines.iloc[-1], "datetime"):
-            calc_indicator(ust.m30_klines)
-        if api.is_changing(ust.m5_klines.iloc[-1], "datetime"):
-            calc_indicator(ust.m5_klines)
-
-        if api.is_changing(ust.quote, "last_price"):
-            ust.open_volumes()
-            ust.upgrade_stop_loss_price()
-            ust.try_stop_loss()
