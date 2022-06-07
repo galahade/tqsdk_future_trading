@@ -3,6 +3,7 @@ from tqsdk import TargetPosTask
 from math import floor
 from utils.tools import calc_indicator, diff_two_value, get_date_str
 
+base_persent = 0.02
 
 def get_logger():
     return logging.getLogger(__name__)
@@ -10,19 +11,25 @@ def get_logger():
 
 class Trade_status:
 
-    def __init__(self, is_trading, position):
-        self.is_trading = is_trading
+    def __init__(self, api, position, quote):
+        self.is_trading = False
+        self.api = api
         self.daily_condition = 0
-        self.position = position
+        self.quote = quote
+        self.open_price_long = position.open_price_long
+        self.open_long = position.pos_long
+        self.stop_loss_price = 0.0
+        self.has_upgrade_stop_loss_price = False
+        self.has_begin_sale_for_profit = False
+        # 1:实时跟踪止盈，2:收盘前5分钟判断止盈
+        self.profit_condition = 0
+        # 以下属性只有在 profit_condition = 3 时使用
+        # 1:出售剩余仓位的80%，2:平仓
+        self.profit_stage = 0
 
-    def get_long_volumes(self):
-        return self.position.pos_long
-
-    def set_daily_condition(self, num):
-        self.__daily_condition = num
-
-    def set_daily_kline(self, kline):
+    def set_daily_kline(self, kline, num):
         self.__daily_kline = kline
+        self.__daily_condition = num
 
     def set_h2_kline(self, kline):
         self.__h2_kline = kline
@@ -39,6 +46,28 @@ class Trade_status:
            not self.__h2_kline or not self.__m30_kline):
             logger.debug("创建交易状态失败, 日线条件或K线没有正确设置")
             return False
+        self.is_trading = True
+        ema9 = self.__h2_kline.ema9
+        ema22 = self.__h2_kline.ema22
+        ema60 = self.__h2_kline.ema60
+        close = self.__h2_kline.close
+        macd = self.__h2_kline["MACD.close"]
+        self.stop_loss_price = self.open_price_long * (1 - base_persent)
+        if (ema22 > ema60 and close > ema22 and diff_two_value(ema22, ema60) <
+           1.2 and self.__daily_condition in [1, 2, 3, 4]):
+            self.profit_condition = 1
+        elif (ema60 > ema22 and ema22 > close and close > ema9 and macd > 0 and
+              self.__daily_condition == 5):
+            self.profit_condition = 1
+        else:
+            self.profit_condition = 2
+
+    def check_profit_status(self):
+        self.api.wait_update()
+        price = self.open_price_long
+        current_price = self.quote.last_price
+        if current_price >= price * (1 + base_persent * 3):
+            self.has_begin_sale_for_profit = True
 
 
 class Underlying_symbol_trade:
@@ -49,15 +78,10 @@ class Underlying_symbol_trade:
         self.quote = api.get_quote(symbol)
         self.underlying_symbol = self.quote.underlying_symbol
         self.symbol = symbol
-
         self.position = api.get_position(self.underlying_symbol)
         self.target_pos = TargetPosTask(api, self.underlying_symbol)
         self.account = account
-
-        self.base_persent = 0.02
-        self.stop_loss_price = 0.0
-        self.has_upgrade_stop_loss_price = False
-        self.volumes = 0
+        self.trade_status = Trade_status(api, self.position, self.quote)
         self.daily_klines = api.get_kline_serial(self.underlying_symbol,
                                                  60*60*24)
         self.h2_klines = api.get_kline_serial(self.underlying_symbol, 60*60*2)
@@ -153,6 +177,7 @@ MACD:{kline['MACD.close']}")
 收盘价:{kline.close},diff:{diff},MACD:{kline['MACD.close']}")
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'qualified'] = 1
+                    self.trade_status.set_daily_kline(kline, 1)
                     return 1
             elif kline.ema22 > kline.ema60:
                 if diff < 2 and kline.close > kline.ema60:
@@ -161,6 +186,7 @@ MACD:{kline['MACD.close']}")
 收盘价:{kline.close},diff:{diff}")
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'qualified'] = 2
+                    self.trade_status.set_daily_kline(kline, 2)
                     return 2
                 elif (diff > 2 and diff < 3
                       and (kline.close > kline.ema60
@@ -170,6 +196,7 @@ MACD:{kline['MACD.close']}")
 收盘价:{kline.close},diff:{diff}")
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'qualified'] = 3
+                    self.trade_status.set_daily_kline(kline, 3)
                     return 3
                 elif (diff > 3
                       and (kline.close > kline.ema60
@@ -180,10 +207,12 @@ MACD:{kline['MACD.close']}")
 收盘价:{kline.close},diff:{diff}")
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'qualified'] = 4
+                    self.trade_status.set_daily_kline(kline, 4)
                     return 4
         else:
             self.daily_klines.loc[self.daily_klines.id == kline.id,
                                   'qualified'] = 5
+            self.trade_status.set_daily_kline(kline, 5)
             return 5
 
     def calc_volume_by_price(self):
