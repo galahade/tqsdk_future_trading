@@ -1,6 +1,7 @@
 from tqsdk import TqApi, TqAuth, TqBacktest, TqSim, BacktestFinished
 from datetime import date
-from tools import Underlying_symbol_trade, wait_to_trade
+from trade import Underlying_symbol_trade
+from utils.trade_utils import wait_to_trade
 import logging
 
 

@@ -80,5 +80,4 @@ def wait_to_trade(api, ust):
 
         if api.is_changing(ust.quote, "last_price"):
             ust.open_volumes()
-            ust.upgrade_stop_loss_price()
-            ust.try_stop_loss()
+            ust.scan_order_status()
