@@ -10,7 +10,6 @@ def get_logger():
 
 
 base_persent = 0.02
-logger = get_logger()
 
 
 class Trade_status:
@@ -59,8 +58,10 @@ class Trade_status:
         ema60 = self.__h2_kline.ema60
         close = self.__h2_kline.close
         macd = self.__h2_kline["MACD.close"]
-        self.stop_loss_price = self.open_price_long * (1 - base_persent)
-        self.stop_profit_point = self.open_price_long * (1 + base_persent * 3)
+        self.stop_loss_price = round(self.open_price_long * (1 - base_persent),
+                                     2)
+        self.stop_profit_point = round(self.open_price_long * (1 + base_persent
+                                                               * 3), 2)
         logger.info(f"{get_date_str(self.__quote.datetime)}\
 止损为:{self.stop_loss_price}")
         logger.info(f"{get_date_str(self.__quote.datetime)}\
@@ -75,12 +76,13 @@ class Trade_status:
             self.profit_condition = 2
 
     def check_profit_status(self):
+        logger = get_logger()
         if self.is_trading:
             self.api.wait_update()
             current_price = self.__quote.last_price
             if current_price >= self.stop_profit_point:
-                logger.info(f"{get_date_str(self.quote.datetime)}\
-现价:{self.quote.last_price}达到止盈价位{self.stop_profit_point},开始监控止盈")
+                logger.info(f"{get_date_str(self.__quote.datetime)}\
+现价:{self.__quote.last_price}达到止盈价位{self.stop_profit_point},开始监控止盈")
                 self.has_begin_sale_for_profit = True
                 return True
         return False
@@ -185,7 +187,7 @@ class Underlying_symbol_trade:
             return True
         if ((close > ema60 or macd > 0) and diff < 1.2):
             logger.debug(f"{get_date_str(self.quote.datetime)}\
-满足两小时线条件3,ema60:{ema60},收盘:{close},MACD:{macd},diff:{diff}")
+满足两小时线条件3,ema22:{ema22},ema60:{ema60},收盘:{close},MACD:{macd},diff:{diff}")
             self.h2_klines.loc[self.h2_klines.id == kline.id,
                                'qualified'] = 1
             self.trade_status.set_h2_kline(kline)
@@ -333,8 +335,8 @@ class Underlying_symbol_trade:
         while True:
             self.api.wait_update()
             if self.position.pos_long == target_volume:
-                logger.debug(f"{get_date_str(self.quote.datetime)}售出仓位,\
-价格:{self.quote.last_price},手数:{target_volume}")
+                logger.debug(f"{get_date_str(self.quote.datetime)}平仓,\
+价格:{self.quote.last_price},手数:{num}")
                 break
         return target_volume
 
