@@ -4,11 +4,13 @@ from math import floor
 from tqsdk import tafunc
 from utils.tools import calc_indicator, diff_two_value, get_date_str
 
-base_persent = 0.02
-
 
 def get_logger():
     return logging.getLogger(__name__)
+
+
+base_persent = 0.02
+logger = get_logger()
 
 
 class Trade_status:
@@ -22,6 +24,7 @@ class Trade_status:
         self.open_price_long = 0.0
         self.open_long = 0
         self.stop_loss_price = 0.0
+        self.has_ready_switch_contract = False
         self.has_begin_sale_for_profit = False
         # 1:实时跟踪止盈，2:收盘前5分钟判断止盈
         self.profit_condition = 0
@@ -47,9 +50,6 @@ class Trade_status:
             return False
         if (not self.__daily_condition or self.__daily_kline.empty or
            self.__h2_kline.empty or self.__m30_kline.empty):
-            logger.debug(f"创建交易状态失败, 日线条件或K线没有正确设置:\
-日线条件:{self.__daily_condition},日线:{self.__daily_kline},2h线:{self.__h2_kline}\
-30m线:{self.__m30_kline}")
             return False
         self.is_trading = True
         self.open_price_long = self.__position.open_price_long
@@ -77,9 +77,10 @@ class Trade_status:
     def check_profit_status(self):
         if self.is_trading:
             self.api.wait_update()
-            price = self.open_price_long
             current_price = self.__quote.last_price
-            if current_price >= price * (1 + base_persent * 3):
+            if current_price >= self.stop_profit_point:
+                logger.info(f"{get_date_str(self.quote.datetime)}\
+现价:{self.quote.last_price}达到止盈价位{self.stop_profit_point},开始监控止盈")
                 self.has_begin_sale_for_profit = True
                 return True
         return False
@@ -187,6 +188,7 @@ class Underlying_symbol_trade:
 满足两小时线条件3,ema60:{ema60},收盘:{close},MACD:{macd},diff:{diff}")
             self.h2_klines.loc[self.h2_klines.id == kline.id,
                                'qualified'] = 1
+            self.trade_status.set_h2_kline(kline)
             return True
         if num in [1, 2, 5]:
             if close > ema60 or macd > 0:
@@ -241,7 +243,7 @@ class Underlying_symbol_trade:
                                               'qualified'] = 2
                         self.trade_status.set_daily_kline(kline, 2)
                         return 2
-                    elif diff > 1 and diff < 3 and close > ema60:
+                    elif (diff > 1 and diff < 3 and close > ema60):
                         logger.debug(f"{get_date_str(self.quote.datetime)}\
 满足日线条件3,ema9:{ema9},ema22:{ema22},ema60:{ema60},\
 收盘:{close},diff:{diff}")

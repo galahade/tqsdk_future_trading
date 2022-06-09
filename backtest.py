@@ -10,7 +10,7 @@ acc = TqSim()
 
 def trade(start_year, end_year):
     logger = logging.getLogger(__name__)
-    start_time = date(start_year, 4, 1)
+    start_time = date(start_year, 1, 1)
     end_time = date(end_year, 12, 31)
 
     logger.debug(f"回测开始日期：{start_time} 结束日期：{end_time}")
