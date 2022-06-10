@@ -69,7 +69,7 @@ class Trade_status:
         if (ema22 > ema60 and close > ema22 and diff_two_value(ema22, ema60) <
            1.2 and self.__daily_condition in [1, 2, 3, 4]):
             self.profit_condition = 1
-        elif (ema60 > ema22 and ema22 > close and close > ema9 and macd > 0 and
+        elif (ema60 > ema22 and ema22 > ema9 and close > ema9 and macd > 0 and
               self.__daily_condition == 5):
             self.profit_condition = 1
         else:
@@ -263,15 +263,14 @@ class Underlying_symbol_trade:
                                               'qualified'] = 4
                         self.trade_status.set_daily_kline(kline, 4)
                         return 4
-                else:
-                    if diff > 3 and (close > ema60 and close < ema22):
-                        logger.debug(f"{get_date_str(self.quote.datetime)}\
-满足日线条件4,ema9:{ema9},ema22:{ema22},ema60:{ema60},\
+                if diff > 3 and (close > ema60 and close < ema22):
+                    logger.debug(f"{get_date_str(self.quote.datetime)}\
+满足日线条件5,ema9:{ema9},ema22:{ema22},ema60:{ema60},\
 收盘:{close},diff:{diff}")
-                        self.daily_klines.loc[self.daily_klines.id == kline.id,
-                                              'qualified'] = 5
-                        self.trade_status.set_daily_kline(kline, 5)
-                        return 5
+                    self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                          'qualified'] = 5
+                    self.trade_status.set_daily_kline(kline, 5)
+                    return 5
 
     def calc_volume_by_price(self):
         available = self.account.balance*0.02
@@ -287,43 +286,44 @@ class Underlying_symbol_trade:
         logger = get_logger()
         position_log = self.position.pos_long
         stop_profit_point = self.trade_status.stop_profit_point
-        if position_log > 0 and self.trade_status.has_begin_sale_for_profit or\
-           self.trade_status.check_profit_status():
+        if position_log > 0 and (self.trade_status.has_begin_sale_for_profit or
+           self.trade_status.check_profit_status()):
             dk = self.daily_klines.iloc[-2]
+            quote_time = tafunc.time_to_datetime(self.quote.datetime)
+            time_num = int(quote_time.time().strftime("%H%M%S"))
             if self.trade_status.profit_condition == 1:
-                if self.quote.last_price < dk.ema22:
-                    self.__closeout()
-                    logger.info(f"{get_date_str(self.quote.datetime)}止赢1,\
-现价:{self.quote.last_price}, 手数:{position_log}\
+                if 150000 > time_num > 145500:
+                    if self.quote.last_price < dk.ema22:
+                        self.__closeout()
+                        logger.info(f"{get_date_str(self.quote.datetime)}止赢1,\
+现价:{self.quote.last_price},ema22:{dk.ema22},手数:{position_log}\
 止赢起始价:{stop_profit_point}")
             elif self.trade_status.profit_condition == 2:
-                quote_time = tafunc.time_to_datetime(self.quote.datetime)
-                quote_time.time()
-                if 150000 > int(quote_time.time().strftime("%H%M%S")) > 145500:
-                    # logger.debug(f"当前交易时间为:{quote_time.time()}")
-                    price = self.quote.last_price
-                    m30k = self.m30_klines.iloc[-2]
-                    if self.trade_status.profit_stage == 0:
-                        sold_volume = int(self.position.pos_long / 2)
-                        rest_volume = self.__soldout(sold_volume)
-                        self.trade_status.profit_stage = 1
-                        logger.info(f"{get_date_str(self.quote.datetime)}止赢2-0,\
+                price = self.quote.last_price
+                m30k = self.m30_klines.iloc[-2]
+                if self.trade_status.profit_stage == 0:
+                    sold_volume = int(self.position.pos_long / 2)
+                    rest_volume = self.__soldout(sold_volume)
+                    self.trade_status.profit_stage = 1
+                    logger.info(f"{get_date_str(self.quote.datetime)}止赢2-0,\
 现价:{self.quote.last_price},手数:{sold_volume},剩余仓位:{rest_volume}\
 止赢起始价:{stop_profit_point}")
-                    elif self.trade_status.profit_stage == 1:
-                        if price < m30k.ema60:
-                            sold_volume = int(self.position.pos_long * 0.8)
-                            rest_volume = self.__soldout(sold_volume)
-                            self.trade_status.profit_stage = 2
-                            logger.info(f"{get_date_str(self.quote.datetime)}止赢2-1,\
-现价:{self.quote.last_price},手数:{sold_volume},剩余仓位:{rest_volume}\
+                else:
+                    if 150000 > time_num > 145500:
+                        if self.trade_status.profit_stage == 1:
+                            if price < m30k.ema60:
+                                sold_volume = int(self.position.pos_long * 0.8)
+                                rest_volume = self.__soldout(sold_volume)
+                                self.trade_status.profit_stage = 2
+                                logger.info(f"{get_date_str(self.quote.datetime)}止赢2-1,\
+现价:{self.quote.last_price},30m_ema60:{m30k.ema60},手数:{sold_volume},剩余仓位:{rest_volume}\
 止赢起始价:{stop_profit_point}")
-                    elif self.trade_status.profit_stage == 2:
-                        if price < dk.ema22:
-                            sold_volume = self.position.pos_long
-                            self.__closeout()
-                            logger.info(f"{get_date_str(self.quote.datetime)}止赢2-2,\
-现价:{self.quote.last_price},手数:{sold_volume}\
+                        elif self.trade_status.profit_stage == 2:
+                            if price < dk.ema22:
+                                sold_volume = self.position.pos_long
+                                self.__closeout()
+                                logger.info(f"{get_date_str(self.quote.datetime)}止赢2-2,\
+现价:{self.quote.last_price},ema22:{dk.ema22},手数:{sold_volume}\
 止赢起始价:{stop_profit_point}")
 
     def __soldout(self, num):
