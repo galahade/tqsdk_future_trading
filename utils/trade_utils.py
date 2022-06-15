@@ -79,7 +79,7 @@ def switch_contract(ust, api):
     logger = get_logger()
     # 获取最新主力合约
     underlying_symbol = ust.quote.underlying_symbol
-    if ust.trade_status.has_ready_switch_contract \
+    if ust.trade_status.ready_s_contract \
        and __need_switch_contract(ust.underlying_symbol, underlying_symbol,
                                   ust.quote):
         new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account)
@@ -109,7 +109,7 @@ def wait_to_trade(api, ust):
         if api.is_changing(ust.quote, "underlying_symbol"):
             logger.info(f"{get_date_str(ust.quote.datetime)}平台主力合约已更换,\
 开始准备切换合约")
-            ust.trade_status.has_ready_switch_contract = True
+            ust.trade_status.ready_s_contract = True
         if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
             calc_indicator(ust.daily_klines)
             ust = switch_contract(ust, api)
