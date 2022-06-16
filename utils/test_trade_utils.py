@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from tools import examine_symbol
 from tqsdk import tafunc
 

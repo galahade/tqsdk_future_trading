@@ -72,7 +72,8 @@ def calc_indicator(klines, is_daily_kline=False):
     calc_ema60(klines)
     calc_ema9(klines)
 
-    klines["qualified"] = 0
+    klines["l_qualified"] = 0
+    klines["s_qualified"] = 0
 
     klines["ema22.board"] = "MAIN"
     klines["ema22.color"] = "red"

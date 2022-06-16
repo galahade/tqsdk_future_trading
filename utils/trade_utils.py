@@ -120,5 +120,4 @@ def wait_to_trade(api, ust):
         if api.is_changing(ust.m5_klines.iloc[-1], "datetime"):
             calc_indicator(ust.m5_klines)
         if api.is_changing(ust.quote, "last_price"):
-            ust.open_volumes()
-            ust.scan_order_status()
+            ust.start_trade()
