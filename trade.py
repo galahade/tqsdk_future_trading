@@ -1,8 +1,9 @@
 import logging
 from tqsdk import TargetPosTask
-from math import floor
+from math import floor, ceil
 from tqsdk import tafunc
-from utils.tools import calc_indicator, diff_two_value, get_date_str
+from utils.tools import calc_indicator, diff_two_value, get_date_str,\
+    calc_date_delta
 
 
 def get_logger():
@@ -11,7 +12,14 @@ def get_logger():
 
 open_volumes_persent = 0.02
 l_base_persent = 0.02
-s_base_persent = 0.03
+s_base_persent = 0.02
+
+
+def calc_price_by_scale(base_price, base_persent, is_add, scale):
+    if is_add:
+        return round(base_price * (1 + base_persent * scale), 2)
+    else:
+        return round(base_price * (1 - base_persent * scale), 2)
 
 
 class Trade_status:
@@ -39,13 +47,10 @@ class Trade_status:
         self.l_profit_stage = 0
 
         # 做空交易属性
-        self.s_open_vols = 0
+        self.s_open_pos = 0
         self.s_stop_loss_price = 0.0
-        self.__s_begin_profit = False
-        self.s_daily_cond = 0
-        self.s_profit_cond = 0
-        self.s_stop_profit_point = 0.0
-        self.s_profit_stage = 0
+        # 一共4做空方式
+        self.s_cond = 0
 
     def set_daily_kline(self, kline, short_or_long, num):
         self.__daily_kline = kline
@@ -53,7 +58,7 @@ class Trade_status:
         if self.short_or_long == 1:
             self.l_daily_cond = num
         elif self.short_or_long == -1:
-            self.s_daily_cond = num
+            self.s_cond = num
 
     def set_h2_kline(self, kline):
         self.__h2_kline = kline
@@ -107,23 +112,12 @@ class Trade_status:
             return False
         self.is_trading = True
         open_price = self.__position.open_price_short
-        self.s_open_vols = self.__position.pos_short
-        ema9 = self.__h2_kline.ema9
-        ema22 = self.__h2_kline.ema22
-        close = self.__h2_kline.close
-        macd = self.__h2_kline["MACD.close"]
+        self.s_open_pos = self.__position.pos_short
         self.s_stop_loss_price = round(open_price * (1 + s_base_persent), 2)
-        self.s_stop_profit_point = round(open_price * (1 - s_base_persent * 3),
-                                         2)
+        if self.s_cond == 4:
+            self.trade_date = self.__quote.datetime
         logger.info(f'{get_date_str(self.__quote.datetime)}'
                     f'<做空>止损设置为:{self.s_stop_loss_price}')
-        logger.info(f'{get_date_str(self.__quote.datetime)}'
-                    f'<做空>止赢起始价为:{self.s_stop_profit_point}')
-        if self.s_daily_cond in [1, 3]:
-            self.s_profit_cond = 1
-        elif (self.s_daily_cond == 2 and close > ema9 > ema22 and
-              macd > 0):
-            self.s_profit_cond = 2
 
     def check_profit_status(self, s_or_l):
         logger = get_logger()
@@ -142,19 +136,7 @@ class Trade_status:
                     self.__l_begin_profit = True
                     return True
             elif s_or_l == -1:
-                if self.__s_begin_profit:
-                    return True
-                elif c_price <= self.s_stop_profit_point:
-                    logger.info(log_str.format(
-                        get_date_str(self.__quote.datetime),
-                        '做空', self.__quote.last_price,
-                        self.s_stop_profit_point))
-                    self.s_stop_loss_price = round(
-                        self.__position.open_price_short
-                        * (1 - s_base_persent),
-                        2)
-                    self.__s_begin_profit = True
-                    return True
+                return True
         return False
 
     def check_stop_loss_status(self):
@@ -186,7 +168,7 @@ class Trade_status:
     def reset_short(self):
         self.is_trading = False
         self.s_daily_cond = 0
-        self.s_open_vols = 0
+        self.s_open_pos = 0
         self.s_stop_loss_price = 0.0
         self.__s_begin_profit = False
         self.s_profit_cond = 0
@@ -237,9 +219,8 @@ class Underlying_symbol_trade:
             if self.__match_dk_cond_short():
                 if self.__match_2hk_cond_short():
                     if(self.__match_30mk_cond_short()):
-                        if self.__match_5mk_cond_short():
-                            if self.position.pos_short == 0:
-                                return True
+                        if self.position.pos_short == 0:
+                            return True
         return False
 
     def __match_5mk_cond_long(self):
@@ -251,20 +232,6 @@ class Underlying_symbol_trade:
         diff = diff_two_value(close, ema60)
         log_str = '{} 满足<做多>5分钟线条件:ema60:{},收盘:{}, MACD:{}, diff:{}'
         if close > ema60 and macd > 0 and diff < 1.2:
-            logger.debug(log_str.format(get_date_str(self.quote.datetime),
-                         ema60, close, macd, diff))
-            return True
-        return False
-
-    def __match_5mk_cond_short(self):
-        logger = get_logger()
-        kline = self.m5_klines.iloc[-2]
-        ema60 = kline.ema60
-        macd = kline['MACD.close']
-        close = kline.close
-        diff = diff_two_value(close, ema60)
-        log_str = '{} 满足<做空>5分钟线条件:ema60:{},收盘:{}, MACD:{}, diff:{}'
-        if close < ema60 and macd < 0 and diff < 1.2:
             logger.debug(log_str.format(get_date_str(self.quote.datetime),
                          ema60, close, macd, diff))
             return True
@@ -292,21 +259,54 @@ class Underlying_symbol_trade:
     def __match_30mk_cond_short(self):
         logger = get_logger()
         kline = self.m30_klines.iloc[-2]
+        s_cond = self.trade_status.s_cond
+        ema9 = kline.ema9
+        ema22 = kline.ema22
         ema60 = kline.ema60
         macd = kline['MACD.close']
         close = kline.close
-        diff = diff_two_value(close, ema60)
-        log_str = '{} 满足<做空>30分钟线条件:ema60:{},收盘:{}, MACD:{}, diff:{}'
+        high = kline.high
+        diff_c_60 = diff_two_value(close, ema60)
+        diff_h_60 = diff_two_value(high, ema60)
+        log_str = ('{} 满足<做空>30分钟线条件{}:ema9:{},ema22:{},ema60:{},'
+                   '收盘:{},最高:{},diff_c_60:{},diff_h_60:{},MACD:{}')
         if kline["s_qualified"]:
-            return True
-        if close < ema60 and macd < 0 and diff < 1.2:
-            logger.debug(log_str.format(get_date_str(self.quote.datetime),
-                         ema60, close, macd, diff))
+            return kline["s_qualified"]
+        if ema60 > close:
+            if ema60 > ema22 > ema9:
+                if s_cond == 1 and diff_h_60 < 1.2:
+                    logger.debug(log_str.format(
+                        get_date_str(self.quote.datetime), 1, ema9, ema22,
+                        ema60, close, high, diff_c_60, diff_h_60, macd))
+                    self.m30_klines.loc[self.m30_klines.id == kline.id,
+                                        's_qualified'] = 1
+                    self.trade_status.set_m30_kline(kline)
+                    return 1
+                elif s_cond == 3 and diff_c_60 < 1.2:
+                    logger.debug(log_str.format(
+                        get_date_str(self.quote.datetime), 3, ema9, ema22,
+                        ema60, close, high, diff_c_60, diff_h_60, macd))
+                    self.m30_klines.loc[self.m30_klines.id == kline.id,
+                                        's_qualified'] = 3
+                    self.trade_status.set_m30_kline(kline)
+                    return 3
+            elif s_cond == 4 and diff_c_60 < 1.2 and macd < 0:
+                logger.debug(log_str.format(
+                    get_date_str(self.quote.datetime), 3, ema9, ema22,
+                    ema60, close, high, diff_c_60, diff_h_60, macd))
+                self.m30_klines.loc[self.m30_klines.id == kline.id,
+                                    's_qualified'] = 3
+                self.trade_status.set_m30_kline(kline)
+                return 4
+        elif s_cond == 2 and close > ema60 > ema22 and diff_c_60 < 1.2:
+            logger.debug(log_str.format(
+                get_date_str(self.quote.datetime), 2, ema9, ema22,
+                ema60, close, high, diff_c_60, diff_h_60, macd))
             self.m30_klines.loc[self.m30_klines.id == kline.id,
-                                's_qualified'] = 1
+                                's_qualified'] = 2
             self.trade_status.set_m30_kline(kline)
-            return True
-        return False
+            return 2
+        return 0
 
     def __match_2hk_cond_long(self, num):
         logger = get_logger()
@@ -351,36 +351,63 @@ class Underlying_symbol_trade:
     def __match_2hk_cond_short(self):
         logger = get_logger()
         kline = self.h2_klines.iloc[-2]
-        dk_cond = self.trade_status.s_daily_cond
+        s_cond = self.trade_status.s_cond
+        ema9 = kline.ema9
         ema22 = kline.ema22
         ema60 = kline.ema60
         macd = kline['MACD.close']
         close = kline.close
-        diff_c = diff_two_value(close, ema60)
-        diff_22 = diff_two_value(ema22, ema60)
-        diff_c_22 = diff_two_value(close, ema60)
+        high = kline.high
+        diff_h_9 = diff_two_value(high, ema9)
+        diff_h_22 = diff_two_value(high, ema22)
+        diff_c_60 = diff_two_value(close, ema60)
+        diff_22_60 = diff_two_value(ema22, ema60)
         log_str = ('{} 满足<做空>两小时线条件{}:ema22:{},ema60:{},收盘:{},'
-                   'diff_c:{},diff_22:{},deff_c_22:{},MACD:{}')
+                   'diff_h_9:{},diff_h_22:{},diff_22_60:{},diff_c_60:{},'
+                   'MACD:{}')
         if kline["s_qualified"]:
-            return True
-        if ema22 < ema60 and diff_22 < 1:
-            logger.debug(log_str.format(get_date_str(
-                self.quote.datetime
-            ), 1, ema22, ema60, close, diff_c, diff_22, diff_c_22, macd))
-            self.h2_klines.loc[self.h2_klines.id == kline.id,
-                               's_qualified'] = 1
-            self.trade_status.set_h2_kline(kline)
-            return True
-        if (dk_cond in [1, 2] and diff_22 > 1 and diff_c < 1.8
-           and diff_c_22 < 1.8 and close < ema60):
-            logger.debug(log_str.format(get_date_str(
-                self.quote.datetime
-            ), 1, ema22, ema60, close, diff_c, diff_22, diff_c_22, macd))
-            self.h2_klines.loc[self.h2_klines.id == kline.id,
-                               's_qualified'] = 1
-            self.trade_status.set_h2_kline(kline)
-            return True
-        return False
+            return kline["s_qualified"]
+        if ema60 > ema22 > ema9:
+            if ((high >= ema9 or diff_h_9 < 0.02)
+               or (high >= ema22 or diff_h_22 < 0.2)) and s_cond == 1:
+                logger.debug(log_str.format(get_date_str(
+                    self.quote.datetime
+                ), 1, ema22, ema60, close, diff_h_9, diff_h_22, diff_22_60,
+                    diff_c_60, macd))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   's_qualified'] = 1
+                self.trade_status.set_h2_kline(kline)
+                return 1
+            elif ema60 > close and diff_c_60 < 1.2 and s_cond == 2:
+                logger.debug(log_str.format(get_date_str(
+                    self.quote.datetime
+                ), 2, ema22, ema60, close, diff_h_9, diff_h_22, diff_22_60,
+                    diff_c_60, macd))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   's_qualified'] = 2
+                self.trade_status.set_h2_kline(kline)
+                return 2
+        if macd < 0:
+            if (s_cond == 3 and
+               (ema60 > ema22 > ema9 and (high >= ema9 or diff_h_9 < 0.02))):
+                logger.debug(log_str.format(get_date_str(
+                    self.quote.datetime
+                ), 3, ema22, ema60, close, diff_h_9, diff_h_22, diff_22_60,
+                    diff_c_60, macd))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   's_qualified'] = 3
+                self.trade_status.set_h2_kline(kline)
+                return 3
+            elif (s_cond == 4 and ema9 > ema22 > ema60 and diff_22_60) < 1:
+                logger.debug(log_str.format(get_date_str(
+                    self.quote.datetime
+                    ), 4, ema22, ema60, close, diff_h_9, diff_h_22, diff_22_60,
+                    diff_c_60, macd))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   's_qualified'] = 4
+                self.trade_status.set_h2_kline(kline)
+                return 4
+        return 0
 
     def __match_dk_cond_long(self):
         # 如果id不足59，说明合约成交日还未满60天，ema60均线还不准确
@@ -460,35 +487,42 @@ class Underlying_symbol_trade:
             return kline["s_qualified"]
         elif kline.id > 58:
             diff = diff_two_value(ema22, ema60)
-            diff2 = diff_two_value(ema9, ema60)
-            if ema22 > ema9 > ema60:
-                if 0 < diff < 3 and ema22 > close > ema60 and macd < 0:
+            if ema22 > ema9 and macd < 0:
+                if ema22 > ema60 > close and diff < 2:
                     logger.debug(log_str.format(get_date_str(
                         self.quote.datetime
                     ), 1, ema9, ema22, ema60, close, diff, macd))
-
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           's_qualified'] = 1
                     self.trade_status.set_daily_kline(kline, -1, 1)
-                    return True
-                elif 0 < diff < 3 and close < ema60 and macd < 0:
+                    return 1
+                elif ema22 > close > ema60:
+                    if 2 < diff < 3:
+                        logger.debug(log_str.format(get_date_str(
+                            self.quote.datetime
+                        ), 2, ema9, ema22, ema60, close, diff, macd))
+                        self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                              's_qualified'] = 2
+                        self.trade_status.set_daily_kline(kline, -1, 2)
+                        return 2
+                    elif diff > 3:
+                        logger.debug(log_str.format(get_date_str(
+                            self.quote.datetime
+                        ), 3, ema9, ema22, ema60, close, diff, macd))
+                        self.daily_klines.loc[self.daily_klines.id == kline.id,
+                                              's_qualified'] = 3
+                        self.trade_status.set_daily_kline(kline, -1, 3)
+                        return 3
+            elif ema60 > ema22:
+                if diff < 1:
                     logger.debug(log_str.format(get_date_str(
                         self.quote.datetime
-                    ), 2, ema9, ema22, ema60, close, diff, macd))
+                    ), 4, ema9, ema22, ema60, close, diff, macd))
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
-                                          's_qualified'] = 1
-                    self.trade_status.set_daily_kline(kline, -1, 2)
-                    return True
-            elif ema60 > ema22 > ema9:
-                if 0 < diff < 1 and 0 < diff2 < 1 and close < ema60:
-                    logger.debug(log_str.format(get_date_str(
-                        self.quote.datetime
-                    ), 3, ema9, ema22, ema60, close, diff, macd))
-                    self.daily_klines.loc[self.daily_klines.id == kline.id,
-                                          's_qualified'] = 1
-                    self.trade_status.set_daily_kline(kline, -1, 3)
-                    return True
-        return False
+                                          's_qualified'] = 4
+                    self.trade_status.set_daily_kline(kline, -1, 4)
+                    return 4
+        return 0
 
     def __calc_volume_by_price(self):
         available = self.account.balance * open_volumes_persent
@@ -555,24 +589,75 @@ class Underlying_symbol_trade:
                                     stop_profit_point,
                                 ))
 
-    def __short_stop_profit(self, pos_short, stop_profit_point):
+    def __short_profit_closeout(self, kline):
+        logger = get_logger()
+        ema22 = kline.ema22
+        ema60 = kline.ema60
+        close = kline.close
+        s_cond = self.trade_status.s_cond
+        macd = kline['MACD.close']
+        log_str = "{} <做空>止盈条件{} 最后5分钟平仓,现价:{},手数:{}"
+        if (s_cond != 4 and close > ema60 and ema22 > ema60 and macd > 0):
+            pos_short = self.position.pos_short
+            price = self.quote.last_price
+            self.__closeout(-1)
+            logger.info(log_str.format(
+               get_date_str(self.quote.datetime),
+               s_cond, price, pos_short))
+
+    def __short_stop_profit(self, pos_short):
         logger = get_logger()
         ts = self.trade_status
         price = self.quote.last_price
-        log_str = "{} <做空>止赢{},现价:{},手数:{},剩余仓位:{},止赢起始价:{}"
+        h2k = self.h2_klines.iloc[-2]
+        m30k = self.m30_klines.iloc[-2]
+        m5k = self.m5_klines.iloc[-2]
+        open_price = self.position.open_price_short
+        s_cond = self.trade_status.s_cond
+        quote_time = tafunc.time_to_datetime(self.quote.datetime)
+        log_str = "{} <做空>止赢条件{},现价:{},手数:{},剩余仓位:{}"
         if pos_short > 0 and ts.check_profit_status(-1):
-            if ts.l_profit_cond == 1:
-                if price >= self.position.open_price_short * (1 -
-                                                              s_base_persent *
-                                                              5):
+            if s_cond in [2, 3, 4]:
+                if price <= calc_price_by_scale(open_price, s_base_persent,
+                                                False, 2):
+                    ts.s_stop_loss_price = open_price
+                elif price <= calc_price_by_scale(open_price, s_base_persent,
+                                                  False, 4):
+                    sale_pos = ceil(pos_short / 3)
+                    current_pos = self.__soldout(-1, pos_short, sale_pos)
+                    logger.info(log_str.format(
+                        get_date_str(self.quote.datetime),
+                        str(ts.s_cond) + '-2', price, sale_pos, current_pos))
+            elif s_cond == 1:
+                if price <= calc_price_by_scale(open_price, s_base_persent,
+                                                False, 3):
+                    ts.s_stop_loss_price = open_price
+                elif price <= calc_price_by_scale(open_price, s_base_persent,
+                                                  False, 5):
+                    ts.s_stop_loss_price = calc_price_by_scale(open_price,
+                                                               s_base_persent,
+                                                               False,
+                                                               3)
+                elif price <= calc_price_by_scale(open_price, s_base_persent,
+                                                  False, 10):
+                    sale_pos = ceil(pos_short / 3)
+                    current_pos = self.__soldout(-1, pos_short, sale_pos)
+                    logger.info(log_str.format(
+                        get_date_str(self.quote.datetime),
+                        str(ts.s_cond) + '-3', price, sale_pos, current_pos))
+
+            if self.__is_last_5_minitus(quote_time):
+                if s_cond == 1:
+                    self.__short_profit_closeout(h2k)
+                elif s_cond == 2:
+                    self.__short_profit_closeout(m30k)
+                elif s_cond == 3:
+                    self.__short_profit_closeout(m5k)
+                elif calc_date_delta(ts.trade_date, self.quote.datetime) >= 5:
                     self.__closeout(-1)
                     logger.info(log_str.format(
                         get_date_str(self.quote.datetime),
-                        '1', price, pos_short, 0,
-                        stop_profit_point,
-                    ))
-            elif ts.l_profit_cond == 2:
-                logger.info('这是做空止盈条件2')
+                        str(ts.s_cond) + '-3', price, pos_short, 0))
 
     def __soldout(self, s_or_l, total_vols, sold_volume):
         logger = get_logger()
@@ -616,8 +701,7 @@ class Underlying_symbol_trade:
             self.__long_stop_profit(pos_vols, stop_profit_point)
         elif self.trade_status.short_or_long == -1:
             pos_vols = self.position.pos_short
-            stop_profit_point = self.trade_status.s_stop_profit_point
-            self.__short_stop_profit(pos_vols, stop_profit_point)
+            self.__short_stop_profit(pos_vols)
 
     def __try_stop_loss(self):
         logger = get_logger()

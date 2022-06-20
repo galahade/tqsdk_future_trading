@@ -9,6 +9,13 @@ def get_date_str(float_value):
     return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def calc_date_delta(before_value, after_value):
+    before = tafunc.time_to_datetime(before_value)
+    after = tafunc.time_to_datetime(after_value)
+    delta = after - before
+    return delta.days
+
+
 def is_zhulian_symbol(_symbol):
     pattern = re.compile(r'^(KQ.m@)(CFFEX|CZCE|DCE|INE|SHFE).(\w{1,2})$')
     return pattern.match(_symbol)
