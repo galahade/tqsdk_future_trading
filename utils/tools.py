@@ -25,16 +25,19 @@ class Trade_Book:
         self.count = 1
         self.wb = wb
 
-    def record_open_pos_long(self, symbol, t_time, d_cond, price, pos):
+    def record_open_pos_long(self, symbol, t_time, d_cond, h2_cond, price,
+                             pos):
         self.count += 1
         st = self.sheet
+        cond_str = '日线:{},2小时:{}'
         st.range((self.count, 1)).value = self.count - 1
         st.range((self.count, 2)).value = symbol
         st.range((self.count, 3)).value = '多'
         st.range((self.count, 4)).value = t_time
         st.range((self.count, 5)).value = price
-        st.range((self.count, 6)).value = f'日线条件{d_cond}'
+        st.range((self.count, 6)).value = cond_str.format(d_cond, h2_cond)
         st.range((self.count, 10)).value = pos
+        return self.count
 
     def finish(self):
         self.wb.save('testExcel.xlsx')
