@@ -7,6 +7,7 @@ name = "pypi"
 tqsdk = "*"
 pyyaml = "*"
 pytest = "*"
+xlwings = "*"
 
 [dev-packages]
 
