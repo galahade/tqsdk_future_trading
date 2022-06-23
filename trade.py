@@ -620,7 +620,7 @@ class Underlying_symbol_trade:
         if self.position.pos_long > 0 and ts.check_profit_status(1):
             dk = self.daily_klines.iloc[-2]
             m30k = self.m30_klines.iloc[-2]
-            quote_time = get_date_str(self.quote.datetime),
+            quote_time = get_date_str(self.quote.datetime)
             s_p_reason = '止盈条件:{},盈亏比达到{},售出{}仓位'
 
             ts.update_l_profit_status(dk, m30k)
@@ -779,19 +779,22 @@ class Underlying_symbol_trade:
         tb = self.tb
         quote_time = get_date_str(self.quote.datetime),
         if ts.check_stop_loss_status():
+            stop_loss_price = 0
             if ts.short_or_long == 1:
                 pos = self.position.pos_long
-                self.__closeout(1)
+                stop_loss_price = ts.l_stop_loss_price
                 tb.r_l_sold_pos(self.underlying_symbol,
                                 ts.tb_count, quote_time,
-                                f'止损平仓,止损价{ts.l_stop_loss_price}',
+                                f'止损平仓,止损价{stop_loss_price}',
                                 self.quote.last_price, pos)
+                self.__closeout(1)
             elif ts.short_or_long == -1:
                 pos = self.position.pos_short
+                stop_loss_price = ts.s_stop_loss_price
                 self.__closeout(-1)
             logger.info(f'{get_date_str(self.quote.datetime)} 止损,'
                         f'现价:{self.quote.last_price},'
-                        f'止损价:{ts.l_stop_loss_price}'
+                        f'止损价:{stop_loss_price}'
                         f'多空:{ts.short_or_long},手数:{pos}')
 
     def __open_pos(self, long=True, short=True):

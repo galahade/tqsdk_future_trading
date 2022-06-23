@@ -17,7 +17,10 @@ def __get_date_from_symbol(symbol_last_part):
     return datetime(year, month, day, 15, 0, 0)
 
 
-def __need_switch_contract(last_symbol, underlying_symbol, quote):
+def __need_switch_contract(last_symbol, underlying_symbol, ust):
+    '''判断是否需要换月，规则是：如果原合约有持仓，则在合约交割月之前10天换月
+    否则，在交割月之前一个月月初换月。
+    '''
     logger = get_logger()
     last_symbol_list = examine_symbol(last_symbol)
     today_symbol_list = examine_symbol(underlying_symbol)
@@ -32,68 +35,48 @@ def __need_switch_contract(last_symbol, underlying_symbol, quote):
         logger.warning('新合约非远月合约，不换月')
         return False
     last_date = __get_date_from_symbol(last_symbol_list[2])
-    current_date = tafunc.time_to_datetime(quote.datetime)
+    current_date = tafunc.time_to_datetime(ust.quote.datetime)
     timedelta = last_date - current_date
-    if timedelta.days <= 5:
+    if ust.position.pos != 0 and timedelta.days <= 11:
+        return True
+    elif ust.position.pos == 0 and timedelta.days <= 31:
         return True
     return False
 
 
-'''
 def switch_contract(ust, api):
-    logger = get_logger()
-    # 获取最新主力合约
-    underlying_symbol = ust.quote.underlying_symbol
-    if __need_switch_contract(ust.underlying_symbol, underlying_symbol):
-        new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account)
-        last_pos_long = ust.position.pos_long
-        diff = diff_two_value(new_ust.daily_klines.iloc[-2].ema9,
-                              new_ust.daily_klines.iloc[-2].ema60)
-        if last_pos_long > 0:
-            if diff < 6:
-                ust.target_pos.set_target_volume(0)
-                new_ust.target_pos.set_target_volume(last_pos_long)
-            else:
-                ust.target_pos.set_target_volume(0)
-            while True:
-                api.wait_update()
-                if diff < 6:
-                    if ust.position.pos_long == 0\
-                       and new_ust.position.pos_long == last_pos_long:
-                        logger.info(f"{get_date_str(ust.quote.datetime)}\
-换月买入:换月前-多头{last_pos_long}手 换月后-多头{last_pos_long}手")
-                        new_ust.set_stop_loss_price()
-                        break
-                elif ust.position.pos_long == 0:
-                    logger.info(f"{get_date_str(ust.quote.datetime)} \
-换月平仓:换月前-多头{last_pos_long}手 换月后-多头{new_ust.position.pos_long}手")
-                    break
-            logger.info(f"{get_date_str(ust.quote.datetime)}换月完成:旧合约{ust.underlying_symbol},\
-新合约{new_ust.underlying_symbol}")
-            return new_ust
-    return ust
-'''
-
-
-def switch_contract(ust, api):
+    '''在主连合约更换主力合约后调用，
+    这时，quote的主力合约和交易对象最初的主力合约已不同。
+    如果满足换月条件，则进行换月操作。
+    '''
     logger = get_logger()
     # 获取最新主力合约
     underlying_symbol = ust.quote.underlying_symbol
     if ust.trade_status.ready_s_contract \
        and __need_switch_contract(ust.underlying_symbol, underlying_symbol,
-                                  ust.quote):
+                                  ust):
         new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account, ust.tb)
         last_pos_long = ust.position.pos_long
+        quote_time = get_date_str(ust.quote.datetime)
         if last_pos_long > 0:
             ust.target_pos.set_target_volume(0)
             while True:
                 api.wait_update()
                 if ust.position.pos_long == 0:
-                    logger.info(f"{get_date_str(ust.quote.datetime)} \
-换月平仓:换月前-多头{last_pos_long}手 换月后-多头{new_ust.position.pos_long}手")
+                    logger.info(f'{get_date_str(ust.quote.datetime)}'
+                                f'换月平仓:换月前-多头{last_pos_long}手'
+                                f'换月后-多头{new_ust.position.pos_long}手'
+                                )
+                    ust.tb.r_l_sold_pos(ust.underlying_symbol,
+                                        ust.trade_status.tb_count,
+                                        quote_time,
+                                        '换月平仓',
+                                        ust.quote.last_price,
+                                        last_pos_long)
                     break
-        logger.info(f"{get_date_str(ust.quote.datetime)}换月完成:旧合约{ust.underlying_symbol},\
-新合约{new_ust.underlying_symbol}")
+        logger.info(f'{get_date_str(ust.quote.datetime)}换月完成:'
+                    f'旧合约{ust.underlying_symbol},'
+                    f'新合约{new_ust.underlying_symbol}')
         return new_ust
     return ust
 
@@ -107,8 +90,8 @@ def wait_to_trade(api, ust):
         api.wait_update()
         # 处理更换主力合约问题
         if api.is_changing(ust.quote, "underlying_symbol"):
-            logger.info(f"{get_date_str(ust.quote.datetime)}平台主力合约已更换,\
-开始准备切换合约")
+            logger.debug(f'{get_date_str(ust.quote.datetime)}平台主力合约已更换,'
+                         f'开始准备切换合约')
             ust.trade_status.ready_s_contract = True
         if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
             calc_indicator(ust.daily_klines)
