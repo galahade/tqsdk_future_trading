@@ -1,4 +1,6 @@
 tags
+# excel file
+*.xlsx
 *.swp
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -82,7 +82,7 @@ def switch_contract(ust, api):
     if ust.trade_status.ready_s_contract \
        and __need_switch_contract(ust.underlying_symbol, underlying_symbol,
                                   ust.quote):
-        new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account)
+        new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account, ust.tb)
         last_pos_long = ust.position.pos_long
         if last_pos_long > 0:
             ust.target_pos.set_target_volume(0)

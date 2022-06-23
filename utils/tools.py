@@ -10,7 +10,7 @@ class Trade_Book:
 
     def __init__(self):
         wb = xw.Book()
-        sheet = wb.sheets['future']
+        sheet = wb.sheets[0]
         sheet.range('A1').value = 'No'
         sheet.range('B1').value = '合约名称'
         sheet.range('C1').value = '多空'
@@ -25,8 +25,7 @@ class Trade_Book:
         self.count = 1
         self.wb = wb
 
-    def record_open_pos_long(self, symbol, t_time, d_cond, h2_cond, price,
-                             pos):
+    def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{},2小时:{}'
@@ -37,7 +36,18 @@ class Trade_Book:
         st.range((self.count, 5)).value = price
         st.range((self.count, 6)).value = cond_str.format(d_cond, h2_cond)
         st.range((self.count, 10)).value = pos
-        return self.count
+        return self.count - 1
+
+    def r_l_sold_pos(self, symbol, num, t_time, sold_reason, price, pos):
+        self.count += 1
+        st = self.sheet
+        st.range((self.count, 1)).value = num
+        st.range((self.count, 2)).value = symbol
+        st.range((self.count, 3)).value = '多'
+        st.range((self.count, 7)).value = t_time
+        st.range((self.count, 8)).value = price
+        st.range((self.count, 9)).value = sold_reason
+        st.range((self.count, 10)).value = pos
 
     def finish(self):
         self.wb.save('testExcel.xlsx')

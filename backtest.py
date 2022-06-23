@@ -14,12 +14,12 @@ def trade(start_year, end_year):
     start_time = date(start_year, 1, 1)
     end_time = date(end_year, 12, 31)
 
+    tb = Trade_Book()
     logger.debug(f"回测开始日期：{start_time} 结束日期：{end_time}")
     try:
         api = TqApi(acc, web_gui=":10000",
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
                     auth=TqAuth("galahade", "wombat-gazette-pillory"))
-        tb = Trade_Book()
         symbol = "KQ.m@SHFE.rb"
         account = api.get_account()
         rb_trade = Underlying_symbol_trade(api, symbol, account, tb)
@@ -27,6 +27,7 @@ def trade(start_year, end_year):
 
     except BacktestFinished:
         logger.info(f"回测完成:结束时间:{end_time}")
+        tb.finish()
         # api.close()
         # 打印回测的详细信息
         # print("trade log:", acc.trade_log)

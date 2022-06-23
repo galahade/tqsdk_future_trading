@@ -22,6 +22,12 @@ def calc_price_by_scale(base_price, base_persent, is_add, scale):
         return round(base_price * (1 - base_persent * scale), 2)
 
 
+def is_last_5_minitus(quote):
+    quote_time = tafunc.time_to_datetime(quote.datetime)
+    time_num = int(quote_time.time().strftime("%H%M%S"))
+    return 150000 > time_num > 145500
+
+
 class Trade_status:
 
     def __init__(self, api, position, quote, trade_book):
@@ -53,6 +59,8 @@ class Trade_status:
         # 一共4做空方式
         self.s_cond = 0
 
+        self.tb_count = 0
+
     def set_daily_kline(self, kline, short_or_long, num):
         self.__daily_kline = kline
         self.short_or_long = short_or_long
@@ -76,7 +84,7 @@ class Trade_status:
         if self.is_trading:
             logger.debug("无法创建<做多>新交易状态，交易进行中")
             return False
-        if (self.__short_daily_conditio != 1 or not self.l_daily_cond
+        if (self.short_or_long != 1 or not self.l_daily_cond
             or self.__daily_kline.empty or self.__h2_kline.empty
            or self.__m30_kline.empty):
             logger.debug("交易状态不符合<做多>条件，请检查相关条件")
@@ -98,12 +106,10 @@ class Trade_status:
                     f'<做多>止损设置为:{self.l_stop_loss_price}')
         logger.info(f'{get_date_str(self.__quote.datetime)}'
                     f'<做多>止赢起始价为:{self.l_stop_profit_point}')
-        self.__tb.record_open_pos_long(
+        self.tb_count = self.__tb.r_l_open_pos(
             self.__quote.underlying_symbol,
             get_date_str(self.__quote.datetime),
-            self.l_daily_cond,
-            self.l_h2_cond,
-            open_price,
+            self.l_daily_cond, self.l_h2_cond, open_price,
             self.__position.pos_long
         )
         temp_cond = 0
@@ -162,7 +168,6 @@ class Trade_status:
 
     def check_stop_loss_status(self):
         if self.is_trading:
-            self.api.wait_update()
             pos_long = self.__position.pos_long
             pos_short = self.__position.pos_short
             current_price = self.__quote.last_price
@@ -174,6 +179,62 @@ class Trade_status:
                 if (pos_short > 0 and current_price >=
                    self.s_stop_loss_price):
                     return True
+        return False
+
+    def update_l_profit_status(self, dk, m30k):
+        '''当开仓后，使用该方法判断是否达到监控止盈条件，
+        当开始监控止盈后，根据最新价格，更新止损价格和止盈阶段
+        为止盈提供依据
+        '''
+        pos_long = self.__position.pos_long
+        if pos_long > 0 and self.check_profit_status(1):
+            open_price = self.__position.open_price_long
+            last_price = self.__quote.last_price
+            if self.l_profit_cond == 1:
+                if (self.l_profit_stage == 0 and last_price >=
+                   calc_price_by_scale(open_price, l_base_persent, True, 3)):
+                    self.l_stop_loss_price = open_price
+                    self.l_profit_stage = 1
+                elif (self.l_profit_stage == 1 and self.quote.last_price >=
+                      calc_price_by_scale(open_price,
+                                          l_base_persent, True, 5)):
+                    self.l_stop_loss_price = calc_price_by_scale(
+                        open_price, l_base_persent, True, 3)
+                    self.l_profit_stage = 2
+                elif (self.l_profit_stage == 2 and self.quote.last_price >=
+                      calc_price_by_scale(open_price,
+                                          l_base_persent, True, 10)):
+                    self.l_stop_loss_price = calc_price_by_scale(
+                        open_price, l_base_persent, True, 5)
+                    self.l_profit_stage = 3
+            elif self.l_profit_stage == 0:
+                self.l_stop_loss_price = open_price
+                self.l_profit_stage = 1
+
+    def should_closeout(self, dk, m30k):
+        '''在当日交易结束前5分钟，判断是否应该清仓
+        可返回3种状态：
+        1. True 应该清仓
+        2. False 不清仓
+        3. 8 售出持有仓位的80%
+        '''
+        ema22 = dk.ema22
+        ema9 = dk.ema9
+        ema60 = dk.ema60
+        last_price = self.__quote.last_price
+        if is_last_5_minitus(self.__quote):
+            if ema22 > ema9:
+                if (self.l_profit_cond == 1 and last_price < ema60):
+                    return True
+                elif (self.l_profit_cond in [2, 3] and last_price < ema22):
+                    return True
+                elif self.l_profit_cond == 0:
+                    if self.l_profit_stage == 1:
+                        if last_price < m30k.ema60:
+                            return 8
+                    elif self.l_profit_stage == 2:
+                        if last_price < ema22:
+                            return True
         return False
 
     def reset_long(self):
@@ -220,7 +281,7 @@ class Underlying_symbol_trade:
         self.m30_klines = api.get_kline_serial(self.underlying_symbol, 60*30)
         self.m5_klines = api.get_kline_serial(self.underlying_symbol, 60*5)
 
-        self.__tb = trade_book
+        self.tb = trade_book
 
         calc_indicator(self.daily_klines, is_daily_kline=True)
         calc_indicator(self.m30_klines)
@@ -551,88 +612,54 @@ class Underlying_symbol_trade:
         time_num = int(quote_time.time().strftime("%H%M%S"))
         return 150000 > time_num > 145500
 
-    def __long_stop_profit(self, pos_long, stop_profit_point):
+    def __long_stop_profit(self):
         logger = get_logger()
         ts = self.trade_status
+        s_p_p = ts.l_stop_profit_point
         log_str = "{} <做多>止赢{},现价:{},手数:{},剩余仓位:{},止赢起始价:{}"
-        if pos_long > 0 and ts.check_profit_status(1):
+        if self.position.pos_long > 0 and ts.check_profit_status(1):
             dk = self.daily_klines.iloc[-2]
             m30k = self.m30_klines.iloc[-2]
-            ema9 = dk.ema9
-            ema22 = dk.ema22
-            ema60 = dk.ema60
-            quote_time = tafunc.time_to_datetime(self.quote.datetime)
-            open_price = self.position.open_price_long
-            last_price = self.quote.last_price
-            if ts.l_profit_cond == 1:
-                if (ts.l_profit_stage == 0 and last_price >=
-                   calc_price_by_scale(open_price, l_base_persent, True, 3)):
-                    ts.l_stop_loss_price = open_price
-                    ts.l_profit_stage = 1
-                elif (ts.l_profit_stage == 1 and self.quote.last_price >=
-                      calc_price_by_scale(open_price,
-                                          l_base_persent, True, 5)):
-                    ts.l_stop_loss_price = calc_price_by_scale(
-                        open_price, l_base_persent, True, 3)
-                    ts.l_profit_stage = 2
-                elif (ts.l_profit_stage == 2 and self.quote.last_price >=
-                      calc_price_by_scale(open_price,
-                                          l_base_persent, True, 10)):
-                    ts.l_stop_loss_price = calc_price_by_scale(
-                        open_price, l_base_persent, True, 5)
-                    ts.l_profit_stage = 3
-            elif ts.l_profit_stage == 0:
-                ts.l_stop_loss_price = open_price
-                # 其他止盈状态
-                if ts.l_profit_cond == 0:
-                    sold_pos = int(self.position.pos_long / 2)
-                    rest_pos = self.__soldout(1, self.position.pos_long,
-                                              sold_pos)
-                    logger.info(log_str.format(
-                        get_date_str(self.quote.datetime),
-                        '0-0', self.quote.last_price, sold_pos, rest_pos,
-                        stop_profit_point,
-                    ))
-                ts.l_profit_stage = 1
-            if self.__is_last_5_minitus(quote_time):
-                if ema22 > ema9:
-                    if (ts.l_profit_cond == 1 and last_price < ema60):
-                        self.__closeout(1)
-                        logger.info(log_str.format(
-                            get_date_str(self.quote.datetime),
-                            '1', self.quote.last_price, pos_long, 0,
-                            stop_profit_point,
-                        ))
-                    elif (ts.l_profit_cond in [2, 3] and last_price < ema22):
-                        self.__closeout(1)
-                        logger.info(log_str.format(
-                            get_date_str(self.quote.datetime),
-                            ts.l_profit_cond, self.quote.last_price, pos_long,
-                            0, stop_profit_point,
-                        ))
-                    elif ts.l_profit_cond == 0:
-                        if ts.l_profit_stage == 1:
-                            if last_price < m30k.ema60:
-                                sold_pos = int(self.position.pos_long * 0.8)
-                                rest_pos =\
-                                    self.__soldout(1,
-                                                   self.position.pos_long,
-                                                   sold_pos)
-                                self.trade_status.l_profit_stage = 2
-                                logger.info(log_str.format(
-                                    get_date_str(self.quote.datetime),
-                                    '0-1', self.quote.last_price, sold_pos,
-                                    rest_pos, stop_profit_point,))
-                        elif ts.l_profit_stage == 2:
-                            if last_price < ema22:
-                                sold_pos = self.position.pos_long
-                                self.__closeout(1)
-                                logger.info(log_str.format(
-                                    get_date_str(self.quote.datetime),
-                                    '0-2', self.quote.last_price, sold_pos,
-                                    0,
-                                    stop_profit_point,
-                                ))
+            quote_time = get_date_str(self.quote.datetime),
+            s_p_reason = '止盈条件:{},盈亏比达到{},售出{}仓位'
+
+            ts.update_l_profit_status(dk, m30k)
+
+            if ts.l_profit_cond == 0 and ts.l_profit_stage == 1:
+                sold_pos = int(self.position.pos_long / 2)
+                rest_pos = self.__soldout(1, self.position.pos_long, sold_pos)
+                self.trade_status.l_profit_stage = 2
+                logger.info(log_str.format(
+                    quote_time, '0-1', self.quote.last_price, sold_pos,
+                    rest_pos, s_p_p))
+                self.tb.r_l_sold_pos(self.underlying_symbol,
+                                     ts.tb_count, quote_time,
+                                     s_p_reason.format('其他', '1:2', '50%'),
+                                     self.quote.last_price, sold_pos)
+            result = ts.should_closeout(dk, m30k)
+            if result == 8:
+                sold_pos = int(self.position.pos_long * 0.8)
+                rest_pos = self.__soldout(1, self.position.pos_long,
+                                          sold_pos)
+                self.trade_status.l_profit_stage = 2
+                logger.info(log_str.format(
+                    quote_time, '0-2', self.quote.last_price, sold_pos,
+                    rest_pos, s_p_p))
+                self.tb.r_l_sold_pos(self.underlying_symbol,
+                                     ts.tb_count, quote_time,
+                                     s_p_reason.format('其他', '', '80%'),
+                                     self.quote.last_price, sold_pos)
+            elif result:
+                self.__closeout(1)
+                logger.info(log_str.format(
+                    get_date_str(self.quote.datetime),
+                    ts.l_profit_cond, self.quote.last_price,
+                    self.position.pos_long, 0, s_p_p))
+                self.tb.r_l_sold_pos(self.underlying_symbol,
+                                     ts.tb_count, quote_time,
+                                     s_p_reason.format(ts.l_profit_cond,
+                                                       '', '全部'),
+                                     self.quote.last_price, sold_pos)
 
     def __short_profit_closeout(self, kline):
         logger = get_logger()
@@ -741,74 +768,62 @@ class Underlying_symbol_trade:
 
     def __try_stop_profit(self):
         if self.trade_status.short_or_long == 1:
-            pos_vols = self.position.pos_long
-            stop_profit_point = self.trade_status.l_stop_profit_point
-            self.__long_stop_profit(pos_vols, stop_profit_point)
+            self.__long_stop_profit()
         elif self.trade_status.short_or_long == -1:
-            pos_vols = self.position.pos_short
-            self.__short_stop_profit(pos_vols)
+            pos = self.position.pos_short
+            self.__short_stop_profit(pos)
 
     def __try_stop_loss(self):
         logger = get_logger()
         ts = self.trade_status
+        tb = self.tb
+        quote_time = get_date_str(self.quote.datetime),
         if ts.check_stop_loss_status():
             if ts.short_or_long == 1:
-                pos_vols = self.position.pos_long
+                pos = self.position.pos_long
                 self.__closeout(1)
+                tb.r_l_sold_pos(self.underlying_symbol,
+                                ts.tb_count, quote_time,
+                                f'止损平仓,止损价{ts.l_stop_loss_price}',
+                                self.quote.last_price, pos)
             elif ts.short_or_long == -1:
-                pos_vols = self.position.pos_short
+                pos = self.position.pos_short
                 self.__closeout(-1)
             logger.info(f'{get_date_str(self.quote.datetime)} 止损,'
                         f'现价:{self.quote.last_price},'
                         f'止损价:{ts.l_stop_loss_price}'
-                        f'多空:{ts.short_or_long},手数:{pos_vols}')
+                        f'多空:{ts.short_or_long},手数:{pos}')
 
-    def __open_volumes(self):
+    def __open_pos(self, long=True, short=True):
         logger = get_logger()
         log_str = '{} 合约:{}开仓 开仓价:{} {}头{}手'
-        if self.__can_open_volumes_long():
-            wanted_volume = self.__calc_pos_by_price()
-            self.target_pos.set_target_volume(wanted_volume)
+        if long and self.__can_open_volumes_long():
+            wanted_pos = self.__calc_pos_by_price()
+            self.target_pos.set_target_volume(wanted_pos)
             while True:
-                self.api.wait_update()
-                if self.position.pos_long == wanted_volume:
+                self.__api.wait_update()
+                if self.position.pos_long == wanted_pos:
                     break
             logger.info(log_str.format(get_date_str(self.quote.datetime),
                         self.underlying_symbol, self.position.open_price_long,
-                        '多', wanted_volume))
+                        '多', wanted_pos))
             self.trade_status.make_long_deal()
-        elif self.__can_open_volumes_short():
-            wanted_volume = self.__calc_pos_by_price() * -1
-            self.target_pos.set_target_volume(wanted_volume)
-            while True:
-                self.api.wait_update()
-                if self.position.pos_short() == wanted_volume * -1:
-                    break
-            logger.info(log_str.format(get_date_str(self.quote.datetime),
-                        self.underlying_symbol, self.position.open_price_short,
-                        '空', wanted_volume * -1))
-            self.trade_status.make_short_deal()
-    '''
-    def __open_volumes(self):
-        logger = get_logger()
-        log_str = '{} 合约:{}开仓 开仓价:{} {}头{}手'
-        if self.__can_open_volumes_short():
-            wanted_volume = self.__calc_volume_by_price() * -1
-            self.target_pos.set_target_volume(wanted_volume)
+        elif short and self.__can_open_volumes_short():
+            wanted_pos = self.__calc_pos_by_price() * -1
+            self.target_pos.set_target_volume(wanted_pos)
             while True:
                 self.__api.wait_update()
-                if self.position.pos_short == - wanted_volume:
+                if self.position.pos_short() == wanted_pos * -1:
                     break
             logger.info(log_str.format(get_date_str(self.quote.datetime),
                         self.underlying_symbol, self.position.open_price_short,
-                        '空', wanted_volume * -1))
+                        '空', wanted_pos * -1))
             self.trade_status.make_short_deal()
-    '''
 
     def __scan_order_status(self):
         self.__try_stop_loss()
         self.__try_stop_profit()
 
     def start_trade(self):
-        self.__open_volumes()
+        self.__open_pos(short=False)
         self.__scan_order_status()
