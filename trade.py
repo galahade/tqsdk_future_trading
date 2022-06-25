@@ -500,6 +500,7 @@ class Underlying_symbol_trade:
             return kline["l_qualified"]
         elif kline.id > 58:
             diff = diff_two_value(ema9, ema60)
+            diff_c_60 = diff_two_value(close, ema60)
             if ema22 < ema60:
                 # 判断是否满足日线条件1
                 if diff < 1 and close > ema60 and macd > 0:
@@ -538,7 +539,7 @@ class Underlying_symbol_trade:
                                           'l_qualified'] = 4
                     self.trade_status.set_daily_kline(kline, 1, 4)
                     return True
-                elif (diff > 3 and ema22 > close > ema60):
+                elif (diff > 3 and ema22 > close > ema60 and diff_c_60):
                     logger.debug(log_str.format(
                         trade_time, 5, ema9, ema22,
                         ema60, close, diff, macd))
@@ -786,7 +787,7 @@ class Underlying_symbol_trade:
         ts = self.trade_status
         tb = self.tb
         tick = self.ticks.iloc[-1]
-        trade_time = get_date_str(tick.datetime),
+        trade_time = get_date_str(tick.datetime)
         last_price = tick.last_price
         if ts.check_stop_loss_status():
             stop_loss_price = 0
