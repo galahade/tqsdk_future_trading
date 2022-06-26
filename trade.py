@@ -30,11 +30,12 @@ def is_last_5_minitus(tick):
 
 class Trade_status:
 
-    def __init__(self, api, position, quote, trade_book):
+    def __init__(self, api, position, ticks, trade_book):
         self.api = api
-        self.__quote = quote
         self.__position = position
+        self.__ticks = ticks
         self.__tb = trade_book
+        self.__symbol = ticks.iloc[-1].symbol
 
         self.is_trading = False
         # -1:做空,0:初始状态,1:做多
@@ -93,8 +94,8 @@ class Trade_status:
         self.__make_l_profit_cond()
 
         self.tb_count = self.__tb.r_l_open_pos(
-            self.__quote.underlying_symbol,
-            get_date_str(self.__quote.datetime),
+            self.__symbol,
+            self.__current_date_str(),
             self.l_daily_cond, self.l_h2_cond,
             self.__position.open_price_long,
             self.__position.pos_long
@@ -103,13 +104,14 @@ class Trade_status:
     def __make_l_prices(self):
         logger = get_logger()
         open_price = self.__position.open_price_long
+        curr_date = self.__current_date_str()
         self.l_stop_loss_price = calc_price_by_scale(
             open_price, l_base_persent, False, 1)
         self.l_stop_profit_point = calc_price_by_scale(
             open_price, l_base_persent, True, 3)
-        logger.info(f'{get_date_str(self.__quote.datetime)}'
+        logger.info(f'{curr_date}'
                     f'<做多>止损设置为:{self.l_stop_loss_price}')
-        logger.info(f'{get_date_str(self.__quote.datetime)}'
+        logger.info(f'{curr_date}'
                     f'<做多>止赢起始价为:{self.l_stop_profit_point}')
 
     def __make_l_profit_cond(self):
@@ -144,25 +146,25 @@ class Trade_status:
         open_price = self.__position.open_price_short
         self.s_open_pos = self.__position.pos_short
         self.s_stop_loss_price = round(open_price * (1 + s_base_persent), 2)
+        curr_date = self.__current_date_str()
         if self.s_cond == 4:
-            self.trade_date = self.__quote.datetime
-        logger.info(f'{get_date_str(self.__quote.datetime)}'
+            self.trade_date = curr_date
+        logger.info(f'{curr_date}'
                     f'<做空>止损设置为:{self.s_stop_loss_price}')
 
     def check_profit_status(self, s_or_l):
         logger = get_logger()
         if self.is_trading:
             self.api.wait_update()
-            c_price = self.__quote.last_price
+            c_price = self.__current_price()
             log_str = '{} {} 现价:{} 达到止盈价位{} 开始监控'
             if s_or_l == 1:
                 if self.__l_begin_profit:
                     return True
                 elif c_price >= self.l_stop_profit_point:
                     logger.info(log_str.format(
-                        get_date_str(self.__quote.datetime),
-                        '做多', self.__quote.last_price,
-                        self.l_stop_profit_point))
+                        self.__current_date_str(),
+                        '做多', c_price, self.l_stop_profit_point))
                     self.__l_begin_profit = True
                     return True
             elif s_or_l == -1:
@@ -173,7 +175,7 @@ class Trade_status:
         if self.is_trading:
             pos_long = self.__position.pos_long
             pos_short = self.__position.pos_short
-            current_price = self.__quote.last_price
+            current_price = self.__current_price()
             if self.short_or_long == 1:
                 if (pos_long > 0 and current_price <=
                    self.l_stop_loss_price):
@@ -204,17 +206,28 @@ class Trade_status:
         2. False 不清仓
         3. 8 售出持有仓位的80%
         '''
+        logger = get_logger()
+        log_str = '{} 止盈条件:{},当前价:{},售出比例:{}日线EMA22:{},30mEMA60:{}'
         ema22 = dk.ema22
-        last_price = self.__quote.last_price
+        last_price = self.__current_price()
         if is_last_5_minitus(tick):
             if (self.l_profit_cond == 1 and last_price < ema22):
+                logger.debug(log_str.format(
+                 self.__current_date_str(), 1,
+                 last_price, '100%', ema22, m30k.ema60))
                 return True
             elif self.l_profit_cond == 0:
                 if self.l_profit_stage == 2:
                     if last_price < m30k.ema60:
+                        logger.debug(log_str.format(
+                         self.__current_date_str(), 0,
+                         last_price, '80%', ema22, m30k.ema60))
                         return 8
                 elif self.l_profit_stage == 3:
                     if last_price < ema22:
+                        logger.debug(log_str.format(
+                         self.__current_date_str(), 0,
+                         last_price, '100%', ema22, m30k.ema60))
                         return True
         return False
 
@@ -238,6 +251,12 @@ class Trade_status:
         self.s_stop_profit_point = 0.0
         self.s_profit_stage = 0
 
+    def __current_price(self):
+        return self.__ticks.iloc[-1].last_price
+
+    def __current_date_str(self):
+        return get_date_str(self.__ticks.iloc[-1].datetime)
+
 
 class Underlying_symbol_trade:
     '''
@@ -254,8 +273,6 @@ class Underlying_symbol_trade:
         self.position = api.get_position(self.underlying_symbol)
         self.target_pos = TargetPosTask(api, self.underlying_symbol)
         self.account = account
-        self.trade_status = Trade_status(api, self.position, self.quote,
-                                         trade_book)
         self.daily_klines = api.get_kline_serial(self.underlying_symbol,
                                                  60*60*24)
         self.h2_klines = api.get_kline_serial(self.underlying_symbol, 60*60*2)
@@ -264,6 +281,8 @@ class Underlying_symbol_trade:
         self.ticks = api.get_tick_serial(self.underlying_symbol)
 
         self.tb = trade_book
+        self.trade_status = Trade_status(api, self.position, self.ticks,
+                                         trade_book)
 
         calc_indicator(self.daily_klines, is_daily_kline=True)
         calc_indicator(self.m30_klines)
@@ -388,6 +407,7 @@ class Underlying_symbol_trade:
         macd = kline['MACD.close']
         close = kline.close
         open_price = kline.open
+        high = kline.high
         diff = diff_two_value(close, ema60)
         diff_o_60 = diff_two_value(open_price, ema60)
         diff_22_60 = diff_two_value(ema22, ema60)
@@ -396,31 +416,41 @@ class Underlying_symbol_trade:
                    'MACD:{},diff:{},diff_open_60:{},diff_22_60:{}')
         if kline["l_qualified"]:
             return True
-        if (ts.l_daily_cond in [1, 2, 5] and (macd > 0 or close > ema60)):
-            logger.debug(log_str.format(
-                trade_time, 1, ema22, ema60, close,
-                macd, diff, diff_o_60, diff_22_60))
-            self.h2_klines.loc[self.h2_klines.id == kline.id,
-                               'l_qualified'] = 1
-            self.trade_status.set_l_h2_kline(kline, 1)
-            return True
-        if (ts.l_daily_cond in [3, 4] and (close > ema60 or macd > 0) and
-           ema22 > ema60):
-            logger.debug(log_str.format(
-                trade_time, 2, ema22, ema60, close,
-                macd, diff, diff_o_60, diff_22_60))
-            self.h2_klines.loc[self.h2_klines.id == kline.id,
-                               'l_qualified'] = 2
-            self.trade_status.set_l_h2_kline(kline, 2)
-            return True
-        if diff < 1.2 and (macd > 0 or close > ema60):
-            logger.debug(log_str.format(
-                trade_time, 3, ema22, ema60, close,
-                macd, diff, diff_o_60, diff_22_60))
-            self.h2_klines.loc[self.h2_klines.id == kline.id,
-                               'l_qualified'] = 3
-            self.trade_status.set_l_h2_kline(kline, 3)
-            return True
+        if ts.l_daily_cond in [1, 2, 5]:
+            if (ema22 < ema60 and diff_22_60 < 1 and macd > 0):
+                logger.debug(log_str.format(
+                    trade_time, 1, ema22, ema60, close,
+                    macd, diff, diff_o_60, diff_22_60))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   'l_qualified'] = 1
+                self.trade_status.set_l_h2_kline(kline, 1)
+                return True
+            elif diff < 3 and diff_o_60 < 3:
+                logger.debug(log_str.format(
+                    trade_time, 2, ema22, ema60, close,
+                    macd, diff, diff_o_60, diff_22_60))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   'l_qualified'] = 2
+                self.trade_status.set_l_h2_kline(kline, 2)
+                return True
+        elif ts.l_daily_cond in [3, 4]:
+            if (close > ema60 > ema22 and diff_22_60 < 1 and macd > 0):
+                logger.debug(log_str.format(
+                    trade_time, 3, ema22, ema60, close,
+                    macd, diff, diff_o_60, diff_22_60))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   'l_qualified'] = 3
+                self.trade_status.set_l_h2_kline(kline, 3)
+                return True
+            elif (ema22 > ema60 and diff_22_60 < 1 and
+                  (high > ema60 or open_price > ema60 or close > ema60)):
+                logger.debug(log_str.format(
+                    trade_time, 4, ema22, ema60, close,
+                    macd, diff, diff_o_60, diff_22_60))
+                self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                   'l_qualified'] = 4
+                self.trade_status.set_l_h2_kline(kline, 4)
+                return True
         return False
 
     def __match_2hk_cond_short(self):
@@ -493,9 +523,10 @@ class Underlying_symbol_trade:
         ema60 = kline.ema60
         macd = kline['MACD.close']
         close = kline.close
+        open_price = kline.open
         trade_time = get_date_str(tick.datetime)
         log_str = ('{} 满足<做多>日线条件{}:ema9:{},ema22:{},ema60:{},收盘:{},'
-                   'diff:{},MACD:{}')
+                   'diff:{},diff_c_60:{},MACD:{}')
         if kline["l_qualified"]:
             return kline["l_qualified"]
         elif kline.id > 58:
@@ -506,7 +537,7 @@ class Underlying_symbol_trade:
                 if diff < 1 and close > ema60 and macd > 0:
                     logger.debug(log_str.format(
                         trade_time, 1, ema9, ema22,
-                        ema60, close, diff, macd))
+                        ema60, close, diff, diff_c_60, macd))
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'l_qualified'] = 1
                     self.trade_status.set_daily_kline(kline, 1, 1)
@@ -516,16 +547,17 @@ class Underlying_symbol_trade:
                 if ema9 > ema22 > ema60 and diff < 1 and close > ema22:
                     logger.debug(log_str.format(
                         trade_time, 2, ema9, ema22,
-                        ema60, close, diff, macd))
+                        ema60, close, diff, diff_c_60, macd))
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'l_qualified'] = 2
                     self.trade_status.set_daily_kline(kline, 1, 2)
                     return True
                 # 判断是否满足日线条件3
-                elif (1 < diff < 3 and close > ema60 and ema9 > ema22):
+                elif (1 < diff < 3 and ema9 > ema22 >
+                      min(open_price, close) > ema60):
                     logger.debug(log_str.format(
                         trade_time, 3, ema9, ema22,
-                        ema60, close, diff, macd))
+                        ema60, close, diff, diff_c_60, macd))
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'l_qualified'] = 3
                     self.trade_status.set_daily_kline(kline, 1, 3)
@@ -534,15 +566,15 @@ class Underlying_symbol_trade:
                 elif 1 < diff < 3 and ema22 > close > ema60 and ema9 < ema22:
                     logger.debug(log_str.format(
                         trade_time, 4, ema9, ema22,
-                        ema60, close, diff, macd))
+                        ema60, close, diff, diff_c_60, macd))
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'l_qualified'] = 4
                     self.trade_status.set_daily_kline(kline, 1, 4)
                     return True
-                elif (diff > 3 and ema22 > close > ema60 and diff_c_60):
+                elif (diff > 3 and ema22 > close > ema60 and diff_c_60 < 2):
                     logger.debug(log_str.format(
                         trade_time, 5, ema9, ema22,
-                        ema60, close, diff, macd))
+                        ema60, close, diff, diff_c_60, macd))
                     self.daily_klines.loc[self.daily_klines.id == kline.id,
                                           'l_qualified'] = 5
                     self.trade_status.set_daily_kline(kline, 1, 5)
@@ -654,17 +686,16 @@ class Underlying_symbol_trade:
                                      last_price, sold_pos)
             elif result:
                 sold_pos = self.position.pos_long
-                logger.debug(tick)
-                self.__closeout(1)
                 logger.info(log_str.format(
                     trade_time,
                     ts.l_profit_cond, last_price,
-                    self.position.pos_long, 0, s_p_p))
+                    sold_pos, 0, s_p_p))
                 self.tb.r_l_sold_pos(self.underlying_symbol,
                                      ts.tb_count, trade_time,
                                      s_p_reason.format(ts.l_profit_cond,
                                                        '', '全部'),
                                      last_price, sold_pos)
+                self.__closeout(1)
 
     def __short_profit_closeout(self, kline):
         logger = get_logger()
@@ -750,7 +781,6 @@ class Underlying_symbol_trade:
         if s_or_l == -1:
             target_volume = - target_volume
         self.target_pos.set_target_volume(target_volume)
-        logger.debug(f'调试当前价格:{tick.last_price}')
         while True:
             self.__api.wait_update()
             if s_or_l == 1:
