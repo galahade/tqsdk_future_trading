@@ -402,12 +402,12 @@ class Underlying_symbol_trade:
         ts = self.trade_status
         kline = self.h2_klines.iloc[-2]
         tick = self.ticks.iloc[-1]
+        ema9 = kline.ema9
         ema22 = kline.ema22
         ema60 = kline.ema60
         macd = kline['MACD.close']
         close = kline.close
         open_price = kline.open
-        high = kline.high
         diff = diff_two_value(close, ema60)
         diff_o_60 = diff_two_value(open_price, ema60)
         diff_22_60 = diff_two_value(ema22, ema60)
@@ -416,41 +416,43 @@ class Underlying_symbol_trade:
                    'MACD:{},diff:{},diff_open_60:{},diff_22_60:{}')
         if kline["l_qualified"]:
             return True
-        if ts.l_daily_cond in [1, 2, 5]:
-            if (ema22 < ema60 and diff_22_60 < 1 and macd > 0):
-                logger.debug(log_str.format(
-                    trade_time, 1, ema22, ema60, close,
-                    macd, diff, diff_o_60, diff_22_60))
-                self.h2_klines.loc[self.h2_klines.id == kline.id,
-                                   'l_qualified'] = 1
-                self.trade_status.set_l_h2_kline(kline, 1)
-                return True
-            elif diff < 3 and diff_o_60 < 3:
-                logger.debug(log_str.format(
-                    trade_time, 2, ema22, ema60, close,
-                    macd, diff, diff_o_60, diff_22_60))
-                self.h2_klines.loc[self.h2_klines.id == kline.id,
-                                   'l_qualified'] = 2
-                self.trade_status.set_l_h2_kline(kline, 2)
-                return True
-        elif ts.l_daily_cond in [3, 4]:
-            if (close > ema60 > ema22 and diff_22_60 < 1 and macd > 0):
-                logger.debug(log_str.format(
-                    trade_time, 3, ema22, ema60, close,
-                    macd, diff, diff_o_60, diff_22_60))
-                self.h2_klines.loc[self.h2_klines.id == kline.id,
-                                   'l_qualified'] = 3
-                self.trade_status.set_l_h2_kline(kline, 3)
-                return True
-            elif (ema22 > ema60 and diff_22_60 < 1 and
-                  (high > ema60 or open_price > ema60 or close > ema60)):
-                logger.debug(log_str.format(
-                    trade_time, 4, ema22, ema60, close,
-                    macd, diff, diff_o_60, diff_22_60))
-                self.h2_klines.loc[self.h2_klines.id == kline.id,
-                                   'l_qualified'] = 4
-                self.trade_status.set_l_h2_kline(kline, 4)
-                return True
+        if diff < 3 or diff_o_60 < 3:
+            if ts.l_daily_cond in [1, 2]:
+                if (ema22 < ema60 and ema9 < ema60 and diff_22_60 < 1
+                   and macd > 0):
+                    logger.debug(log_str.format(
+                        trade_time, 1, ema22, ema60, close,
+                        macd, diff, diff_o_60, diff_22_60))
+                    self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                       'l_qualified'] = 1
+                    self.trade_status.set_l_h2_kline(kline, 1)
+                    return True
+                elif close > ema9 > ema22 > ema60:
+                    logger.debug(log_str.format(
+                        trade_time, 2, ema22, ema60, close,
+                        macd, diff, diff_o_60, diff_22_60))
+                    self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                       'l_qualified'] = 2
+                    self.trade_status.set_l_h2_kline(kline, 2)
+                    return True
+            elif ts.l_daily_cond in [3]:
+                if (close > ema60 > ema22 and diff_22_60 < 1 and macd > 0):
+                    logger.debug(log_str.format(
+                        trade_time, 3, ema22, ema60, close,
+                        macd, diff, diff_o_60, diff_22_60))
+                    self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                       'l_qualified'] = 3
+                    self.trade_status.set_l_h2_kline(kline, 3)
+                    return True
+            elif ts.l_daily_cond == 5:
+                if (ema60 > ema22 > ema9 and diff_22_60 < 1):
+                    logger.debug(log_str.format(
+                        trade_time, 4, ema22, ema60, close,
+                        macd, diff, diff_o_60, diff_22_60))
+                    self.h2_klines.loc[self.h2_klines.id == kline.id,
+                                       'l_qualified'] = 4
+                    self.trade_status.set_l_h2_kline(kline, 4)
+                    return True
         return False
 
     def __match_2hk_cond_short(self):

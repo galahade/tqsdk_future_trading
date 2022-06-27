@@ -11,7 +11,7 @@ acc = TqSim()
 
 def trade(start_year, end_year):
     logger = logging.getLogger(__name__)
-    start_time = date(start_year, 1, 1)
+    start_time = date(start_year, 2, 1)
     end_time = date(end_year, 12, 31)
 
     tb = Trade_Book()
