@@ -418,8 +418,7 @@ class Underlying_symbol_trade:
             return True
         if diff < 3 or diff_o_60 < 3:
             if ts.l_daily_cond in [1, 2]:
-                if (ema22 < ema60 and ema9 < ema60 and diff_22_60 < 1
-                   and macd > 0):
+                if (ema22 < ema60 and ema9 < ema60 and macd > 0):
                     logger.debug(log_str.format(
                         trade_time, 1, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
@@ -436,7 +435,7 @@ class Underlying_symbol_trade:
                     self.trade_status.set_l_h2_kline(kline, 2)
                     return True
             elif ts.l_daily_cond in [3]:
-                if (close > ema60 > ema22 and diff_22_60 < 1 and macd > 0):
+                if (close > ema60 > ema22 and macd > 0):
                     logger.debug(log_str.format(
                         trade_time, 3, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
@@ -445,7 +444,7 @@ class Underlying_symbol_trade:
                     self.trade_status.set_l_h2_kline(kline, 3)
                     return True
             elif ts.l_daily_cond == 5:
-                if (ema60 > ema22 > ema9 and diff_22_60 < 1):
+                if (ema60 > ema22 > ema9):
                     logger.debug(log_str.format(
                         trade_time, 4, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
