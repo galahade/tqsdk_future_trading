@@ -21,7 +21,8 @@ def trade(start_year, end_year):
         api = TqApi(acc,
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
                     auth=TqAuth("galahade", "wombat-gazette-pillory"))
-        symbol = "KQ.m@SHFE.rb"
+        # symbol = "KQ.m@SHFE.rb"
+        symbol = "KQ.m@DCE.p"
         account = api.get_account()
         rb_trade = Underlying_symbol_trade(api, symbol, account, tb)
         wait_to_trade(api, rb_trade)
