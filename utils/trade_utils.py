@@ -36,7 +36,7 @@ def __need_switch_contract(last_symbol, underlying_symbol, ust):
             logger.warning('新合约非远月合约，不换月')
             return False
         last_date = __get_date_from_symbol(last_symbol_list[2])
-        current_date = tafunc.time_to_datetime(ust.ticks[-1].datetime)
+        current_date = tafunc.time_to_datetime(ust.ticks.iloc[-1].datetime)
         timedelta = last_date - current_date
         logger.debug(f'原合约{last_symbol},下一个合约{underlying_symbol}'
                      f'当前时间与原合约交易截止月相差{timedelta.days}天')
@@ -54,6 +54,7 @@ def switch_contract(ust, api):
     '''
     logger = get_logger()
     # 获取最新主力合约
+    logger.debug("try to switch contract")
     underlying_symbol = ust.quote.underlying_symbol
     if __need_switch_contract(ust.underlying_symbol, underlying_symbol, ust):
         new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account, ust.tb)
