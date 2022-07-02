@@ -95,7 +95,7 @@ class Trade_status:
 
         self.tb_count = self.__tb.r_l_open_pos(
             self.__symbol,
-            self.__current_date_str(),
+            self.current_date_str(),
             self.l_daily_cond, self.l_h2_cond,
             self.__position.open_price_long,
             self.__position.pos_long
@@ -104,7 +104,7 @@ class Trade_status:
     def __make_l_prices(self):
         logger = get_logger()
         open_price = self.__position.open_price_long
-        curr_date = self.__current_date_str()
+        curr_date = self.current_date_str()
         self.l_stop_loss_price = calc_price_by_scale(
             open_price, l_base_persent, False, 1)
         self.l_stop_profit_point = calc_price_by_scale(
@@ -146,7 +146,7 @@ class Trade_status:
         open_price = self.__position.open_price_short
         self.s_open_pos = self.__position.pos_short
         self.s_stop_loss_price = round(open_price * (1 + s_base_persent), 2)
-        curr_date = self.__current_date_str()
+        curr_date = self.current_date_str()
         if self.s_cond == 4:
             self.trade_date = curr_date
         logger.info(f'{curr_date}'
@@ -156,14 +156,14 @@ class Trade_status:
         logger = get_logger()
         if self.is_trading:
             self.api.wait_update()
-            c_price = self.__current_price()
+            c_price = self.current_price()
             log_str = '{} {} 现价:{} 达到止盈价位{} 开始监控'
             if s_or_l == 1:
                 if self.__l_begin_profit:
                     return True
                 elif c_price >= self.l_stop_profit_point:
                     logger.info(log_str.format(
-                        self.__current_date_str(),
+                        self.current_date_str(),
                         '做多', c_price, self.l_stop_profit_point))
                     self.__l_begin_profit = True
                     return True
@@ -175,7 +175,7 @@ class Trade_status:
         if self.is_trading:
             pos_long = self.__position.pos_long
             pos_short = self.__position.pos_short
-            current_price = self.__current_price()
+            current_price = self.current_price()
             if self.short_or_long == 1:
                 if (pos_long > 0 and current_price <=
                    self.l_stop_loss_price):
@@ -209,24 +209,24 @@ class Trade_status:
         logger = get_logger()
         log_str = '{} 止盈条件:{},当前价:{},售出比例:{}日线EMA22:{},30mEMA60:{}'
         ema22 = dk.ema22
-        last_price = self.__current_price()
+        last_price = self.current_price()
         if is_last_5_minitus(tick):
             if (self.l_profit_cond == 1 and last_price < ema22):
                 logger.debug(log_str.format(
-                 self.__current_date_str(), 1,
+                 self.current_date_str(), 1,
                  last_price, '100%', ema22, m30k.ema60))
                 return True
             elif self.l_profit_cond == 0:
                 if self.l_profit_stage == 2:
                     if last_price < m30k.ema60:
                         logger.debug(log_str.format(
-                         self.__current_date_str(), 0,
+                         self.current_date_str(), 0,
                          last_price, '80%', ema22, m30k.ema60))
                         return 8
                 elif self.l_profit_stage == 3:
                     if last_price < ema22:
                         logger.debug(log_str.format(
-                         self.__current_date_str(), 0,
+                         self.current_date_str(), 0,
                          last_price, '100%', ema22, m30k.ema60))
                         return True
         return False
@@ -251,10 +251,10 @@ class Trade_status:
         self.s_stop_profit_point = 0.0
         self.s_profit_stage = 0
 
-    def __current_price(self):
+    def current_price(self):
         return self.__ticks.iloc[-1].last_price
 
-    def __current_date_str(self):
+    def current_date_str(self):
         return get_date_str(self.__ticks.iloc[-1].datetime)
 
 

@@ -59,24 +59,25 @@ def switch_contract(ust, api):
     if __need_switch_contract(ust.underlying_symbol, underlying_symbol, ust):
         new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account, ust.tb)
         last_pos_long = ust.position.pos_long
-        quote_time = get_date_str(ust.quote.datetime)
+        trade_time = ust.trade_status.current_date_str()
+        trade_price = ust.trade_status.current_price()
         if last_pos_long > 0:
             ust.target_pos.set_target_volume(0)
             while True:
                 api.wait_update()
                 if ust.position.pos_long == 0:
-                    logger.info(f'{get_date_str(ust.quote.datetime)}'
+                    logger.info(f'{trade_time}'
                                 f'换月平仓:换月前-多头{last_pos_long}手'
                                 f'换月后-多头{new_ust.position.pos_long}手'
                                 )
                     ust.tb.r_l_sold_pos(ust.underlying_symbol,
                                         ust.trade_status.tb_count,
-                                        quote_time,
+                                        trade_time,
                                         '换月平仓',
-                                        ust.quote.last_price,
+                                        trade_price,
                                         last_pos_long)
                     break
-        logger.info(f'{get_date_str(ust.quote.datetime)}换月完成:'
+        logger.info(f'{trade_time}换月完成:'
                     f'旧合约{ust.underlying_symbol},'
                     f'新合约{new_ust.underlying_symbol}')
         return new_ust
@@ -91,15 +92,16 @@ def wait_to_trade(api, ust):
     while True:
         api.wait_update()
         # 处理更换主力合约问题
+        trade_time = ust.trade_status.current_date_str()
         if api.is_changing(ust.quote, "underlying_symbol"):
-            logger.debug(f'{get_date_str(ust.quote.datetime)}平台主力合约已更换,'
+            logger.debug(f'{trade_time}平台主力合约已更换,'
                          f'原合约{ust.underlying_symbol},'
                          f'新合约{ust.quote.underlying_symbol}'
                          f'开始准备切换合约')
             ust.trade_status.ready_s_contract = True
         if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
             calc_indicator(ust.daily_klines)
-            logger.debug(f'日线日期:{get_date_str(ust.daily_klines.iloc[-1].datetime)}')
+            logger.debug(f'日线日期:{trade_time}')
             ust = switch_contract(ust, api)
         if api.is_changing(ust.h2_klines.iloc[-1], "datetime"):
             calc_indicator(ust.h2_klines)
