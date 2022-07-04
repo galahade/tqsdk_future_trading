@@ -319,6 +319,8 @@ class Underlying_symbol_trade:
         trade_time = get_date_str(tick.datetime)
         kline_time = get_date_str(kline.datetime)
         log_str = '{} 满足<做多>5分钟线条件:K线生成时间:{},ema60:{},收盘:{},MACD:{},diff:{}'
+        logger.debug(log_str.format(trade_time, kline_time,
+                     ema60, close, macd, diff))
         if close > ema60 and macd > 0 and diff < 1.2:
             logger.debug(log_str.format(trade_time, kline_time,
                          ema60, close, macd, diff))
@@ -337,7 +339,10 @@ class Underlying_symbol_trade:
         kline_time = get_date_str(kline.datetime)
         log_str = ('{} 满足<做多>30分钟线条件:K线生成时间:{},ema60:{},收盘:{},'
                    'MACD:{}, diff:{}')
+        logger.debug(log_str.format(trade_time, kline_time,
+                     ema60, close, macd, diff))
         if kline["l_qualified"]:
+            logger.debug('30m K 线重复合')
             return True
         if close > ema60 and macd > 0 and diff < 1.2:
             logger.debug(log_str.format(trade_time, kline_time,
@@ -418,15 +423,19 @@ class Underlying_symbol_trade:
         diff_22_60 = diff_two_value(ema22, ema60)
         trade_time = get_date_str(tick.datetime)
         kline_time = get_date_str(kline.datetime)
-        log_str = ('{} 满足<做多>两小时线条件{}:K线生成时间:{},ema22:{},ema60:{},收盘:{},'
+        log_str = ('{} 满足<做多>两小时线条件{}:K线生成时间:{},ema9:{}'
+                   'ema22:{},ema60:{},收盘:{},'
                    'MACD:{},diff:{},diff_open_60:{},diff_22_60:{}')
+#        logger.debug(log_str.format(
+#            trade_time, '不', kline_time, ema9, ema22, ema60, close,
+#            macd, diff, diff_o_60, diff_22_60))
         if kline["l_qualified"]:
             return True
         if diff < 3 or diff_o_60 < 3:
             if ts.l_daily_cond in [1, 2]:
                 if (ema22 < ema60 and ema9 < ema60 and macd > 0):
                     logger.debug(log_str.format(
-                        trade_time, 1, kline_time, ema22, ema60, close,
+                        trade_time, 1, kline_time, ema9, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
                     self.h2_klines.loc[self.h2_klines.id == kline.id,
                                        'l_qualified'] = 1
@@ -434,7 +443,7 @@ class Underlying_symbol_trade:
                     return True
                 elif close > ema9 > ema22 > ema60:
                     logger.debug(log_str.format(
-                        trade_time, 2, kline_time, ema22, ema60, close,
+                        trade_time, 2, kline_time, ema9, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
                     self.h2_klines.loc[self.h2_klines.id == kline.id,
                                        'l_qualified'] = 2
@@ -443,7 +452,7 @@ class Underlying_symbol_trade:
             elif ts.l_daily_cond in [3]:
                 if (close > ema60 > ema22 and macd > 0):
                     logger.debug(log_str.format(
-                        trade_time, 3, kline_time, ema22, ema60, close,
+                        trade_time, 3, kline_time, ema9, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
                     self.h2_klines.loc[self.h2_klines.id == kline.id,
                                        'l_qualified'] = 3
@@ -452,7 +461,7 @@ class Underlying_symbol_trade:
             elif ts.l_daily_cond == 5:
                 if (ema60 > ema22 > ema9):
                     logger.debug(log_str.format(
-                        trade_time, 4, kline_time, ema22, ema60, close,
+                        trade_time, 4, kline_time, ema9, ema22, ema60, close,
                         macd, diff, diff_o_60, diff_22_60))
                     self.h2_klines.loc[self.h2_klines.id == kline.id,
                                        'l_qualified'] = 4

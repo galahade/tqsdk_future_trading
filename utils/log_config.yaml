@@ -7,12 +7,12 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: DEBUG
+    level: INFO
     formatter: brief
     stream: ext://sys.stdout
   file:
     class: logging.FileHandler
-    level: INFO
+    level: DEBUG
     formatter: precise
     filename: trade.log
     mode: w

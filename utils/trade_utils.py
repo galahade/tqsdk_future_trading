@@ -54,7 +54,6 @@ def switch_contract(ust, api):
     '''
     logger = get_logger()
     # 获取最新主力合约
-    logger.debug("try to switch contract")
     underlying_symbol = ust.quote.underlying_symbol
     if __need_switch_contract(ust.underlying_symbol, underlying_symbol, ust):
         new_ust = Underlying_symbol_trade(api, ust.symbol, ust.account, ust.tb)
@@ -89,6 +88,7 @@ def switch_contract(ust, api):
 def wait_to_trade(api, ust):
     logger = get_logger()
     logger.debug("准备开始交易，调用天勤接口，等待交易时机")
+    log_str = '交易当前时间{},K线类型{},K线生成时间{}.'
     while True:
         api.wait_update()
         # 处理更换主力合约问题
@@ -99,15 +99,21 @@ def wait_to_trade(api, ust):
                          f'新合约{ust.quote.underlying_symbol}'
                          f'开始准备切换合约')
             ust.trade_status.ready_s_contract = True
+        # 当天交易结束时即14:59:59，会触发以下条件，
         if api.is_changing(ust.daily_klines.iloc[-1], "datetime"):
             calc_indicator(ust.daily_klines)
-            logger.debug(f'日线日期:{trade_time}')
             ust = switch_contract(ust, api)
+            logger.debug(log_str.format(
+                trade_time, '日线',
+                get_date_str(ust.daily_klines.iloc[-1].datetime)))
         if api.is_changing(ust.h2_klines.iloc[-1], "datetime"):
             calc_indicator(ust.h2_klines)
         if api.is_changing(ust.m30_klines.iloc[-1], "datetime"):
             calc_indicator(ust.m30_klines)
         if api.is_changing(ust.m5_klines.iloc[-1], "datetime"):
             calc_indicator(ust.m5_klines)
-        if api.is_changing(ust.ticks):
-            ust.start_trade()
+        if api.is_changing(ust.ticks.iloc[-1], "datetime"):
+            t_time = tafunc.time_to_datetime(ust.ticks.iloc[-1].datetime)
+            # 为避免交易开始之前做出错误判断，需在交易时间进行交易
+            if t_time.hour > 8:
+                ust.start_trade()
