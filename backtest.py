@@ -14,7 +14,6 @@ def trade(start_year, end_year):
     start_time = date(start_year, 5, 6)
     end_time = date(end_year, 12, 31)
 
-    tb = Trade_Book()
     logger.debug(f"回测开始日期：{start_time} 结束日期：{end_time}")
     try:
         # api = TqApi(acc, web_gui=":10000",
@@ -24,6 +23,7 @@ def trade(start_year, end_year):
         symbol = "KQ.m@SHFE.rb"
         # symbol = "KQ.m@DCE.i"
         account = api.get_account()
+        tb = Trade_Book('rb')
         rb_trade = Underlying_symbol_trade(api, symbol, account, tb)
         wait_to_trade(api, rb_trade)
 

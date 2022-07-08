@@ -8,7 +8,7 @@ import xlwings as xw
 
 class Trade_Book:
 
-    def __init__(self):
+    def __init__(self, symbol):
         wb = xw.Book()
         sheet = wb.sheets[0]
         sheet.range('A1').value = 'No'
@@ -25,6 +25,7 @@ class Trade_Book:
         self.sheet = sheet
         self.count = 1
         self.wb = wb
+        self.name = f'{symbol.replace(".", "_")}'
 
     def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
         self.count += 1
@@ -53,7 +54,7 @@ class Trade_Book:
         st.range((self.count, 11)).value = pos
 
     def finish(self):
-        self.wb.save('TradeData.xlsx')
+        self.wb.save(self.name)
 
 
 def get_date_str(float_value):
