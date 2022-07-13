@@ -7,7 +7,7 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: INFO
+    level: DEBUG
     formatter: brief
     stream: ext://sys.stdout
   file:

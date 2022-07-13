@@ -1,7 +1,7 @@
 import argparse
 from datetime import date
 import sys
-import logging
+from logging import Logger
 import logging.config
 import __main__
 import yaml
@@ -47,3 +47,8 @@ def setup_log_config(log_level):
     with open('utils/log_config.yaml', 'r') as f:
         config = yaml.safe_load(f.read())
         logging.config.dictConfig(config)
+
+
+class LoggerGetter:
+    def __get__(self, obj, objtype=None) -> Logger:
+        return logging.getLogger(obj.__class__.__name__)
