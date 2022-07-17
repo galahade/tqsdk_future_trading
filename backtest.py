@@ -1,6 +1,7 @@
 from tqsdk import TqApi, TqAuth, TqBacktest, TqSim, BacktestFinished
 from datetime import date
 from trade import Underlying_symbol_trade
+from trades import Future_Trade_Util
 from utils.trade_utils import wait_to_trade
 from utils.tools import Trade_Book
 import logging
@@ -24,7 +25,7 @@ def trade(start_year, end_year):
         # symbol = "KQ.m@DCE.i"
         account = api.get_account()
         tb = Trade_Book('rb')
-        rb_trade = Underlying_symbol_trade(api, symbol, account, tb)
+        trade_util = Future_Trade_Util(api, symbol, tb)
         wait_to_trade(api, rb_trade)
 
     except BacktestFinished:

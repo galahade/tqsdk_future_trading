@@ -1,9 +1,10 @@
 from math import floor
 from tqsdk.objs import Quote, Position
 from tqsdk import TqApi, TargetPosTask, tafunc
-from utils.tools import Trade_Book, get_date_str, diff_two_value
+from utils.tools import Trade_Book, get_date_str, diff_two_value,\
+    calc_indicator, examine_symbol
 from utils.common import LoggerGetter
-# from utils.tools import calc_indicator, diff_two_value, get_date_str,\
+# from utils.tools import , diff_two_value, get_date_str,\
 # calc_date_delta, Trade_Book
 
 
@@ -163,6 +164,8 @@ class Trade_Status_Long(Trade_Status):
     def _set_sale_prices(self) -> None:
         open_pos_price = self._pos.open_price_long
         current_date = self.get_current_date_str()
+        self._t_price = open_pos_price
+        self._pos_quantity = self._pos.pos_long
         self._stop_loss_price = self.calc_price(open_pos_price, False, 1)
         self._stop_profit_point = self.calc_price(open_pos_price, True, 3)
         self.logger.info(f'{current_date}'
@@ -307,7 +310,7 @@ class Future_Trade:
         pass
 
     def _try_stop_profit(self) -> None:
-        ''' 止盈抽象方法，需要多空子类重写
+        ''' 止盈抽象方法，需要多_空子类重写
         '''
         pass
 
@@ -348,6 +351,37 @@ class Future_Trade:
         open_p = kline.open
         trade_time = self._ts.get_current_date_str()
         return (ema9, ema22, ema60, macd, close, open_p, trade_time)
+
+    def calc_criteria(self, k_type=1: int):
+        '''计算某个周期的技术指标
+        k_type 用来表示具体周期：
+        1:日线，2:2小时线，3:30分钟线，4:5分钟线
+        '''
+        if k_type == 1:
+            calc_indicator(self._daily_klines)
+        elif k_type == 2:
+            calc_indicator(self._h2_klines)
+        elif k_type == 3:
+            calc_indicator(self._m30_klines)
+        elif k_type == 4:
+            calc_indicator(self._m5_klines)
+
+    def is_changing(self, k_type=1: int) -> bool:
+        '''当某种K线生成新的记录时返回True
+        k_type 代表K线类型
+        '''
+        if k_type == 1:
+            return self._api.is_changing(
+                self._daily_klines.iloc[-1], "datetime")
+        elif k_type == 2:
+            return self._api.is_changing(
+                self._h2_klines.iloc[-1], "datetime")
+        elif k_type == 3:
+            return self._api.is_changing(
+                self._m30_klines.iloc[-1], "datetime")
+        elif k_type == 4:
+            return self._api.is_changing(
+                self._m5_klines.iloc[-1], "datetime")
 
 
 class Future_Trade_Long(Future_Trade):
@@ -634,11 +668,56 @@ class Future_Trade_Short(Future_Trade):
 
 
 class Future_Trade_Util:
+    logger = LoggerGetter()
+
     def __init__(self,  api: TqApi, zl_symbol: str, trade_book: Trade_Book)\
             -> None:
-        self._long_ftu = Long_Future_Trade_Util(api, zl_symbol, trade_book)
+        self._api = api
+        self._zl_quote = api.get_quote(zl_symbol)
+        self._long_ftu = Long_Future_Trade_Util(
+            self._zl_quote, api, zl_symbol, trade_book)
         self._ftu_list: list(Future_Trade_Util) = []
         self._ftu_list.append()
+
+    def _get_date_from_symbol(self, symbol_last_part):
+        temp = int(symbol_last_part)
+        year = int(temp / 100) + 2000
+        month = temp % 100
+        day = 1
+        return datetime(year, month, day, 0, 0, 0)
+
+    def _need_switch_contract(self):
+        '''判断是否需要换月
+        规则是：如果原合约有持仓，则在合约交割月之前10天换月
+        否则，在交割月之前一个月月初换月。
+        '''
+        logger = self.logger
+        if self._long_ftu._next_trade:
+            c_symbol = self._long_ftu._current_trade._symbol
+            n_symbol = self._long_ftu._next_trade._symbol
+            last_symbol_list = examine_symbol(c_symbol)
+            today_symbol_list = examine_symbol(n_symbol)
+            if not last_symbol_list or not today_symbol_list:
+                logger.warning('新/旧合约代码有误，请检验')
+                return False
+            if today_symbol_list[0] != last_symbol_list[0] or \
+                    today_symbol_list[1] != last_symbol_list[1]:
+                logger.warning('新/旧合约品种不一，请检验')
+                return False
+            if underlying_symbol <= last_symbol:
+                logger.warning('新合约非远月合约，不换月')
+                return False
+            last_date = self._get_date_from_symbol(last_symbol_list[2])
+            current_date = tafunc.time_to_datetime(self._zl_quote.datetime)
+            timedelta = last_date - current_date
+            logger.debug(f'原合约{last_symbol},下一个合约{underlying_symbol}'
+                         f'当前时间与原合约交易截止月相差{timedelta.days}天')
+            if ftu.position.pos != 0 and timedelta.days <= 11:
+                return True
+            elif ftu.position.pos == 0 and timedelta.days <= 31:
+                return True
+        return False
+
 
     def try_trade(self) -> None:
         for trade_util in self._ftu_list:
@@ -646,34 +725,91 @@ class Future_Trade_Util:
 
     def create_next_trade(self) -> None:
         '''创建下一个合约的虚拟交易对象
-        做多交易需要重写该方法，当天勤切换主力合约时，使用该方法创建新合约
-        的新合约虚拟交易对象，用来跟踪该合约的交易情况，为换月时是否买入该
-        合约提供依据
+        当前只需要做多提供实现逻辑，做空提供空方法即可。
+        当天勤切换主力合约时，使用该方法为新的主力合约创建虚拟交易对象
+        用来跟踪该合约的交易情况，为换月时是否买入该合约提供依据
         '''
-        for trade_util in self._ftu_list:
-            trade_util.create_next_trade()
+            for trade_util in self._ftu_list:
+                trade_util.create_next_trade()
 
     def switch_trade(self):
+        '''在主连合约更换主力合约后调用，
+        如果满足换月条件，则进行换月操作。
+        '''
+        logger = self.logger
+        # 获取最新主力合约
+        underlying_symbol = ftu.quote.underlying_symbol
+        if self._need_switch_contract():
+            for trade_util in self._ftu_list:
+                trade_util.switch_trade()
+
+       
+    def calc_indicators(self, k_type):
+        '''计算当前交易工具中所有交易的某个周期的技术指标
+        k_type 用来表示具体周期：
+        1:日线，2:2小时线，3:30分钟线，4:5分钟线
+        '''
         for trade_util in self._ftu_list:
-            trade_util.switch_trade()
+            trade_util.calc_indicator(k_type)
+
+    def is_changing(self, k_type) -> bool:
+        '''判断交易工具类种的合约中某种K线是否发生变化
+        由于合约交易时间相同，只需判断一个合约即可
+        当该K线发生变化时，则调用相关方法进行进一步操作
+        k_type 用来表示具体周期：
+        1:日线，2:2小时线，3:30分钟线，4:5分钟线
+        '''
+        return self._long_ftu.is_changing(k_type)
+
+    def start_trading(self) -> None:
+        '''期货交易工具对外接口。交易时间内不断循环调用该接口
+        实现期货交易逻辑，包括：
+        * 尝试开仓
+        * 开仓后尝试止盈止损
+        * 天勤更换主力合约后，做多交易开始跟踪新主力交易状态
+        * 符合换月条件后，切换实际交易对象
+        '''
+        if _api.is_changing(self._zl_quote, "underlying_symbol"):
+            self.create_next_trade()
+        if self.is_changing(1):
+            self.calc_indicators(1)
+            self.switch_trade()
+        if self.is_changing(2):
+            self.calc_indicators(2)
+        if self.is_changing(3):
+            self.calc_indicators(3)
+        if self.is_changing(4):
+            self.calc_indicators(4)
+        if _api.is_changing(self._zl_quote, "datetime"):
+            t_time = tafunc.time_to_datetime(self._zl_quote.datetime)
+            # 为避免交易开始之前做出错误判断，需在交易时间进行交易
+            if t_time.hour > 8:
+                self.try_trade()
 
 
 class Long_Future_Trade_Util(Future_Trade_Util):
-    def __init__(self,  api: TqApi, zl_symbol: str, trade_book: Trade_Book)\
-            -> None:
+    logger = LoggerGetter()
+
+    def __init__(self, zl_quote: Quote  api: TqApi, zl_symbol: str,
+                 trade_book: Trade_Book) -> None:
         self._api = api
         self._tb = trade_book
-        self.zl_quote = api.get_quote(zl_symbol)
+        self._zl_quote = zl_quote
         symbol = self.zl_quote.underlying_symbol
-        self._current_trade = Future_Trade_Long(api, symbol, trade_book)
-        self._future_trade_list = []
+        self._current_trade: Future_Trade_Long = Future_Trade_Long(api, symbol, trade_book)
+        self._future_trade_list: list(Future_Trade_Long) = []
         self._future_trade_list.append(self.current_trade)
 
     def create_next_trade(self):
         ''' 该方法应在天勤切换主力合约后调用
         '''
+        logger = self.logger
         symbol = self.zl_quote.underlying_symbol()
-        self._next_trade = Future_Trade_Long_Virtual(
+        trade_time = self._current_trade._ts.get_current_date_str()
+        logger.debug(f'{trade_time}平台主力合约已更换,'
+                     f'原合约{self._current_trade._symbol},'
+                     f'新合约{symbol},开始准备切换合约')
+        self._next_trade: Future_Trade_Long_Virtual = Future_Trade_Long_Virtual(
             self._api, symbol, self.tb_tb)
         self._future_trade_list.append(self._next_trade)
 
@@ -689,3 +825,42 @@ class Long_Future_Trade_Util(Future_Trade_Util):
         self._future_trade_list.clear()
         self._future_trade_list.append(self._current_trade)
 
+            last_pos_long = ftu.position.pos_long
+            trade_time = ftu.trade_status.current_date_str()
+            trade_price = ftu.trade_status.current_price()
+            if last_pos_long > 0:
+                ftu.target_pos.set_target_volume(0)
+                while True:
+                    api.wait_update()
+                    if ftu.position.pos_long == 0:
+                        logger.info(f'{trade_time}'
+                                    f'换月平仓:换月前-多头{last_pos_long}手'
+                                    f'换月后-多头{new_ftu.position.pos_long}手'
+                                    )
+                        ftu.tb.r_l_sold_pos(ftu.underlying_symbol,
+                                            ftu.trade_status.tb_count,
+                                            trade_time,
+                                            '换月平仓',
+                                            trade_price,
+                                            last_pos_long)
+                        break
+            logger.info(f'{trade_time}换月完成:'
+                        f'旧合约{ftu.underlying_symbol},'
+                        f'新合约{new_ftu.underlying_symbol}')
+
+    def calc_indicators(self, k_type: int):
+        '''计算当前交易工具中所有交易的某个周期的技术指标
+        k_type 用来表示具体周期：
+        1:日线，2:2小时线，3:30分钟线，4:5分钟线
+        '''
+        for trade in self._future_trade_list:
+            trade.calc_criteria(k_type)
+
+    def is_changing(self, k_type) -> bool:
+        '''判断交易工具类种的合约中某种K线是否发生变化
+        由于合约交易时间相同，只需判断一个合约即可
+        当该K线发生变化时，则调用相关方法进行进一步操作
+        k_type 用来表示具体周期：
+        1:日线，2:2小时线，3:30分钟线，4:5分钟线
+        '''
+        return self._current_trade.is_changing(k_type)

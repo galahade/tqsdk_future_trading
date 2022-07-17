@@ -125,7 +125,7 @@ def calc_macd(klines):
     klines["dea"] = macd["dea"]
 
 
-def calc_indicator(klines, is_daily_kline=False):
+def calc_indicator(klines):
     calc_macd(klines)
     calc_ema22(klines)
     calc_ema60(klines)
