@@ -1,7 +1,5 @@
 from tqsdk import TqApi, TqAuth, TqBacktest, TqSim, BacktestFinished
 from datetime import date
-from trade import Underlying_symbol_trade
-from trades import Future_Trade_Util
 from utils.trade_utils import wait_to_trade
 from utils.tools import Trade_Book
 import logging
@@ -12,7 +10,7 @@ acc = TqSim()
 
 def trade(start_year, end_year):
     logger = logging.getLogger(__name__)
-    start_time = date(start_year, 5, 6)
+    start_time = date(start_year, 1, 1)
     end_time = date(end_year, 12, 31)
 
     logger.debug(f"回测开始日期：{start_time} 结束日期：{end_time}")
@@ -23,10 +21,8 @@ def trade(start_year, end_year):
                     auth=TqAuth("galahade", "wombat-gazette-pillory"))
         symbol = "KQ.m@SHFE.rb"
         # symbol = "KQ.m@DCE.i"
-        account = api.get_account()
         tb = Trade_Book('rb')
-        trade_util = Future_Trade_Util(api, symbol, tb)
-        wait_to_trade(api, rb_trade)
+        wait_to_trade(api, symbol, tb)
 
     except BacktestFinished:
         logger.info(f"回测完成:结束时间:{end_time}")

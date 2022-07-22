@@ -25,13 +25,13 @@ class Trade_Book:
         self.sheet = sheet
         self.count = 1
         self.wb = wb
-        self.name = f'{symbol.replace(".", "_")}'
+        self.name = symbol
 
     def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{},2小时:{}'
-        st.range((self.count, 1)).value = self.count - 1
+        st.range((self.count, 1)).value = self.count - 2
         st.range((self.count, 2)).value = symbol
         st.range((self.count, 3)).value = '多'
         st.range((self.count, 4)).value = '买'
@@ -41,17 +41,47 @@ class Trade_Book:
         st.range((self.count, 11)).value = pos
         return self.count - 1
 
-    def r_l_sold_pos(self, symbol, num, t_time, sold_reason, price, pos):
+    def r_lv_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
+        self.count += 1
+        st = self.sheet
+        cond_str = '日线:{},2小时:{},虚拟开仓'
+        st.range((self.count, 1)).value = self.count - 2
+        st.range((self.count, 2)).value = symbol
+        st.range((self.count, 3)).value = '多'
+        st.range((self.count, 4)).value = '买'
+        st.range((self.count, 5)).value = t_time
+        st.range((self.count, 6)).value = price
+        st.range((self.count, 7)).value = cond_str.format(d_cond, h2_cond)
+        st.range((self.count, 11)).value = pos
+        return self.count - 1
+
+    def r_sold_pos(self, symbol: str, num: int, t_time: str, sold_reason: str,
+                   price: float, pos: int, l_or_s: bool):
         self.count += 1
         st = self.sheet
         st.range((self.count, 1)).value = num
         st.range((self.count, 2)).value = symbol
-        st.range((self.count, 3)).value = '多'
+        if l_or_s:
+            st.range((self.count, 3)).value = '多'
+        else:
+            st.range((self.count, 3)).value = '空'
         st.range((self.count, 4)).value = '卖'
         st.range((self.count, 8)).value = t_time
         st.range((self.count, 9)).value = price
         st.range((self.count, 10)).value = sold_reason
         st.range((self.count, 11)).value = pos
+
+    def r_s_open_pos(self, symbol, t_time, price, pos):
+        self.count += 1
+        st = self.sheet
+        st.range((self.count, 1)).value = self.count - 2
+        st.range((self.count, 2)).value = symbol
+        st.range((self.count, 3)).value = '空'
+        st.range((self.count, 4)).value = '买'
+        st.range((self.count, 5)).value = t_time
+        st.range((self.count, 6)).value = price
+        st.range((self.count, 11)).value = pos
+        return self.count - 1
 
     def finish(self):
         self.wb.save(self.name)

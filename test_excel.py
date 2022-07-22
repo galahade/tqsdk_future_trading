@@ -10,5 +10,9 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     position = []
     quote = []
-    ts = Trade_Status_Long(position, quote)
+    symbol = ''
+    tb = None
+    ts = Trade_Status_Long(position, symbol, quote, tb)
+    if 20.08 < ts.calc_price(20, True, 1):
+        print("success")
     print(ts.calc_price(20, True, 1))
