@@ -6,6 +6,7 @@ import backtest
 now = common.now
 is_back_test = False
 start_year = now.year
+start_month = 1
 end_year = now.year
 log_level = "warning"
 
@@ -17,7 +18,7 @@ def main():
         logger = logging.getLogger(__name__)
         if is_back_test:
             logger.debug("开始进行回测")
-            backtest.trade(start_year, end_year)
+            backtest.trade(start_year, start_month, end_year)
         else:
             logger.debug("开始进行正式交易")
     except Exception as e:

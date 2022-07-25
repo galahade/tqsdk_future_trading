@@ -8,9 +8,9 @@ import logging
 acc = TqSim()
 
 
-def trade(start_year, end_year):
+def trade(start_year, start_month, end_year):
     logger = logging.getLogger(__name__)
-    start_time = date(start_year, 1, 1)
+    start_time = date(start_year, start_month, 1)
     end_time = date(end_year, 12, 31)
 
     logger.debug(f"回测开始日期：{start_time} 结束日期：{end_time}")
@@ -19,9 +19,10 @@ def trade(start_year, end_year):
         api = TqApi(acc,
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
                     auth=TqAuth("galahade", "wombat-gazette-pillory"))
-        symbol = "KQ.m@SHFE.rb"
-        # symbol = "KQ.m@DCE.i"
-        tb = Trade_Book('rb')
+        # symbol = "KQ.m@SHFE.rb"
+        symbol = "KQ.m@DCE.i"
+        # symbol = "KQ.m@DCE.p"
+        tb = Trade_Book(symbol)
         wait_to_trade(api, symbol, tb)
 
     except BacktestFinished:

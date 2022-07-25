@@ -25,7 +25,8 @@ class Trade_Book:
         self.sheet = sheet
         self.count = 1
         self.wb = wb
-        self.name = symbol
+        symbol_list = examine_symbol(symbol)
+        self.name = f'{symbol_list[2]}.xlsx'
 
     def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
         self.count += 1
@@ -39,6 +40,7 @@ class Trade_Book:
         st.range((self.count, 6)).value = price
         st.range((self.count, 7)).value = cond_str.format(d_cond, h2_cond)
         st.range((self.count, 11)).value = pos
+        st.autofit(axis="columns")
         return self.count - 1
 
     def r_lv_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
@@ -70,6 +72,7 @@ class Trade_Book:
         st.range((self.count, 9)).value = price
         st.range((self.count, 10)).value = sold_reason
         st.range((self.count, 11)).value = pos
+        st.autofit(axis="columns")
 
     def r_s_open_pos(self, symbol, t_time, price, pos):
         self.count += 1
@@ -81,6 +84,7 @@ class Trade_Book:
         st.range((self.count, 5)).value = t_time
         st.range((self.count, 6)).value = price
         st.range((self.count, 11)).value = pos
+        st.autofit(axis="columns")
         return self.count - 1
 
     def finish(self):
@@ -89,6 +93,10 @@ class Trade_Book:
 
 def get_date_str(float_value):
     return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def get_date(float_value):
+    return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d")
 
 
 def calc_date_delta(before_value, after_value):
@@ -110,7 +118,7 @@ def examine_symbol(_symbol):
         'DCE': re.compile(r'^(DCE).([a-z]{1,2})(\d{4})$'),
         'INE': re.compile(r'^(INE).([a-z]{2})(\d{4})$'),
         'SHFE': re.compile(r'^(SHFE).([a-z]{2})(\d{4})$'),
-        # 'KQ.m': re.compile(r'^(KQ.m@)(CFFEX|CZCE|DCE|INE|SHFE).(\w{1,2})$')
+        'KQ.m': re.compile(r'^(KQ.m@)(CFFEX|CZCE|DCE|INE|SHFE).(\w{1,2})$')
         }
 
     for k, ipattern in pattern_dict_normal.items():
@@ -185,3 +193,9 @@ def diff_two_value(first, second):
 
 def get_logger():
     return logging.getLogger(__name__)
+
+
+if __name__ == '__main__':
+    tb = Trade_Book('KQ.m@DCE.p')
+    print(tb.__dict__)
+    tb.finish()

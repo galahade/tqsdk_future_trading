@@ -24,6 +24,8 @@ def get_argumets():
                            help="进行回测", action="store_true")
     _bt_group.add_argument("-s", "--start_year",
                            type=int, default=now.year, help="backtest 开始年份")
+    _bt_group.add_argument("-m", "--start_month",
+                           type=int, default=1, help="backtest 开始月份")
     _bt_group.add_argument("-e", "--end_year",
                            type=int, default=now.year, help="backtest 结束年份")
     args = _parser.parse_args()
@@ -36,6 +38,7 @@ def get_argumets():
             sys.exit(f"回测结束年份{args.end_year},晚于当前年份{now.year}，参数错误.")
         else:
             __main__.start_year = args.start_year
+            __main__.start_month = args.start_month
             __main__.end_year = args.end_year
 
 

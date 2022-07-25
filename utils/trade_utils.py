@@ -2,6 +2,7 @@ import logging
 from tqsdk import TqApi
 from utils.tools import Trade_Book
 from trade.trades import Future_Trade_Util
+import yaml
 
 
 def get_logger():
@@ -17,3 +18,9 @@ def wait_to_trade(api: TqApi, zl_symbol: str, trade_book: Trade_Book) -> None:
     while True:
         api.wait_update()
         ftu.start_trading()
+
+
+def setup_log_config(log_level):
+    with open('utils/log_config.yaml', 'r') as f:
+        config = yaml.safe_load(f.read())
+        logging.config.dictConfig(config)
