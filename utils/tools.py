@@ -18,17 +18,19 @@ class Trade_Book:
         sheet.range('E1').value = '开仓时间'
         sheet.range('F1').value = '开仓价格'
         sheet.range('G1').value = '开仓条件'
-        sheet.range('H1').value = '平仓时间'
-        sheet.range('I1').value = '平仓价格'
-        sheet.range('J1').value = '平仓条件'
-        sheet.range('K1').value = '手数'
+        sheet.range('H1').value = '平仓价格'
+        sheet.range('I1').value = '平仓时间'
+        sheet.range('J1').value = '平仓价格'
+        sheet.range('K1').value = '平仓条件'
+        sheet.range('L1').value = '手数'
         self.sheet = sheet
         self.count = 1
         self.wb = wb
         symbol_list = examine_symbol(symbol)
         self.name = f'{symbol_list[2]}.xlsx'
 
-    def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
+    def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, sell_cond,
+                     price, pos):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{},2小时:{}'
@@ -39,11 +41,13 @@ class Trade_Book:
         st.range((self.count, 5)).value = t_time
         st.range((self.count, 6)).value = price
         st.range((self.count, 7)).value = cond_str.format(d_cond, h2_cond)
-        st.range((self.count, 11)).value = pos
+        st.range((self.count, 8)).value = sell_cond
+        st.range((self.count, 12)).value = pos
         st.autofit(axis="columns")
         return self.count - 1
 
-    def r_lv_open_pos(self, symbol, t_time, d_cond, h2_cond, price, pos):
+    def r_lv_open_pos(self, symbol, t_time, d_cond, h2_cond, sell_cond,
+                      price, pos):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{},2小时:{},虚拟开仓'
@@ -54,7 +58,8 @@ class Trade_Book:
         st.range((self.count, 5)).value = t_time
         st.range((self.count, 6)).value = price
         st.range((self.count, 7)).value = cond_str.format(d_cond, h2_cond)
-        st.range((self.count, 11)).value = pos
+        st.range((self.count, 8)).value = sell_cond
+        st.range((self.count, 12)).value = pos
         return self.count - 1
 
     def r_sold_pos(self, symbol: str, num: int, t_time: str, sold_reason: str,
@@ -65,25 +70,29 @@ class Trade_Book:
         st.range((self.count, 2)).value = symbol
         if l_or_s:
             st.range((self.count, 3)).value = '多'
+            st.range((self.count, 4)).value = '卖'
         else:
             st.range((self.count, 3)).value = '空'
-        st.range((self.count, 4)).value = '卖'
-        st.range((self.count, 8)).value = t_time
-        st.range((self.count, 9)).value = price
-        st.range((self.count, 10)).value = sold_reason
-        st.range((self.count, 11)).value = pos
+            st.range((self.count, 4)).value = '买'
+        st.range((self.count, 9)).value = t_time
+        st.range((self.count, 10)).value = price
+        st.range((self.count, 11)).value = sold_reason
+        st.range((self.count, 12)).value = pos
         st.autofit(axis="columns")
 
-    def r_s_open_pos(self, symbol, t_time, price, pos):
+    def r_s_open_pos(self, symbol, t_time, d_cond, sell_cond, price, pos):
         self.count += 1
         st = self.sheet
+        cond_str = '日线:{}'
         st.range((self.count, 1)).value = self.count - 2
         st.range((self.count, 2)).value = symbol
         st.range((self.count, 3)).value = '空'
-        st.range((self.count, 4)).value = '买'
+        st.range((self.count, 4)).value = '卖'
         st.range((self.count, 5)).value = t_time
         st.range((self.count, 6)).value = price
-        st.range((self.count, 11)).value = pos
+        st.range((self.count, 7)).value = cond_str.format(d_cond)
+        st.range((self.count, 8)).value = sell_cond
+        st.range((self.count, 12)).value = pos
         st.autofit(axis="columns")
         return self.count - 1
 

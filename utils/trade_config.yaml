@@ -1,0 +1,79 @@
+rules:
+  - symbol: KQ.m@SHFE.rb
+    is_active: True
+    switch_days:
+      - 20
+      - 45
+    main_list:
+      - 1
+      - 5
+      - 10
+    long:
+      buy_pos_scale: 0.02
+      base_scale: 0.02
+      stop_loss_scale: 1
+      profit_start_scale_1: 3
+      promote_scale_1: 6
+      promote_target_1: 3
+      profit_start_scale_2: 1.5
+      promote_scale_2: 3
+      promote_target_2: 1
+    short:
+      buy_pos_scale: 0.02
+      base_scale: 0.03
+      stop_loss_scale: 1
+      profit_start_scale: 3
+      promote_scale: 10
+      promote_target: 5
+  - symbol: KQ.m@DCE.i
+    is_active: False
+    switch_days:
+      - 20
+      - 45
+    main_list:
+      - 1
+      - 5
+      - 9
+    long:
+      buy_pos_scale: 0.002
+      base_scale: 0.02
+      stop_loss_scale: 1
+      profit_start_scale_1: 3
+      promote_scale_1: 6
+      promote_target_1: 3
+      profit_start_scale_2: 1.5
+      promote_scale_2: 3
+      promote_target_2: 1
+    short:
+      buy_pos_scale: 0.02
+      base_scale: 0.03
+      stop_loss_scale: 1
+      profit_start_scale: 3
+      promote_scale: 10
+      promote_target: 5
+  - symbol: KQ.m@DCE.p
+    is_active: False
+    switch_days:
+      - 20
+      - 45
+    main_list:
+      - 1
+      - 5
+      - 9
+    long:
+      buy_pos_scale: 0.02
+      base_scale: 0.02
+      stop_loss_scale: 1
+      profit_start_scale_1: 3
+      promote_scale_1: 6
+      promote_target_1: 3
+      profit_start_scale_2: 1.5
+      promote_scale_2: 3
+      promote_target_2: 1
+    short:
+      buy_pos_scale: 0.02
+      base_scale: 0.03
+      stop_loss_scale: 1
+      profit_start_scale: 3
+      promote_scale: 10
+      promote_target: 5

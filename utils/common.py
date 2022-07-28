@@ -55,3 +55,17 @@ def setup_log_config(log_level):
 class LoggerGetter:
     def __get__(self, obj, objtype=None) -> Logger:
         return logging.getLogger(obj.__class__.__name__)
+
+
+class TradeConfigGetter:
+    '''获取交易配置工具类
+    交易配置字典在对象中的名字为: _rules
+    接收变量名需要与配置字典中的Key值相同
+    '''
+    def __set_name__(self, owner, name):
+        self.dict_key = name
+
+    def __get__(self, obj, objtype=None):
+        configs = getattr(obj, '_rules')
+        value = configs.get(f'{self.dict_key}')
+        return value
