@@ -200,6 +200,28 @@ def diff_two_value(first, second):
     return abs(first - second) / second * 100
 
 
+def is_nline(kline) -> bool:
+    if kline.open > kline.close:
+        return True
+    else:
+        return False
+
+
+def is_decline_2p(kline, l_kline) -> bool:
+    logger = get_logger()
+    log_str = ('当前K线生成时间{},上一根K线生成时间{},'
+               '当前K线收盘价{},上一根K线收盘价{}, 跌幅{}')
+
+    result = (l_kline.close - kline.close)/l_kline.close
+    logger.debug(log_str.format(
+        get_date_str(kline.datetime),
+        get_date_str(l_kline.datetime),
+        kline.close, l_kline.close, result))
+    if result > 0.02:
+        return True
+    return False
+
+
 def get_logger():
     return logging.getLogger(__name__)
 
