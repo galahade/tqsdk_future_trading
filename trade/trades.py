@@ -1,7 +1,7 @@
 from math import floor
 from tqsdk.objs import Quote, Position
 from tqsdk import TqApi, TargetPosTask, tafunc
-from utils.tools import Trade_Book, get_date_str, get_date, diff_two_value,\
+from utils.tools import Trade_Sheet, get_date_str, get_date, diff_two_value,\
     calc_indicator, examine_symbol, is_nline, is_decline_2p
 from utils.common import LoggerGetter, TradeConfigGetter
 from datetime import datetime
@@ -12,7 +12,7 @@ class Trade_Status:
     buy_pos_scale = TradeConfigGetter()
 
     def __init__(self, position: Position, symbol: str, quote: Quote,
-                 tb: Trade_Book, rules: dict) -> None:
+                 tb: Trade_Sheet, rules: dict) -> None:
         self._pos = position
         self._quote = quote
         self.is_trading = False
@@ -530,7 +530,7 @@ class Future_Trade:
     logger = LoggerGetter()
 
     def __init__(self, api: TqApi, symbol: str, trade_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet):
         self._api = api
         self._symbol = symbol
         self._pos = api.get_position(symbol)
@@ -753,7 +753,7 @@ class Future_Trade_Short(Future_Trade):
     '''做空交易类
     '''
     def __init__(self, api: TqApi, symbol: str, trade_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet) -> None:
         super().__init__(api, symbol, trade_config, trade_book)
         rules = trade_config['short']
         self._ts = Trade_Status_Short(
@@ -941,7 +941,7 @@ class Future_Trade_Long(Future_Trade):
     '''做多交易类
     '''
     def __init__(self, api: TqApi, symbol: str, trade_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet) -> None:
         super().__init__(api, symbol, trade_config, trade_book)
         rules = trade_config['long']
         self._ts = Trade_Status_Long(self._pos, symbol,
@@ -1257,7 +1257,7 @@ class Future_Trade_Long_Virtual(Future_Trade_Long):
     当换月时，根据该对象的状态决定是否买入换月后的合约。
     '''
     def __init__(self, api: TqApi, symbol: str, symbol_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet) -> None:
         super().__init__(api, symbol, symbol_config, trade_book)
         self._ts = Trade_Status_Virtual(
             self._pos, symbol, self._quote, trade_book, self._ts._rules)
@@ -1283,7 +1283,7 @@ class Future_Trade_Util:
     logger = LoggerGetter()
 
     def __init__(self,  api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet) -> None:
         self._api = api
         symbol = symbol_config['symbol']
         self._mains = symbol_config['main_list']
@@ -1418,7 +1418,7 @@ class Short_Future_Trade_Util(Future_Trade_Util):
     logger = LoggerGetter()
 
     def __init__(self, zl_quote: Quote, api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet) -> None:
         self._api = api
         self._tb = trade_book
         self._zl_quote = zl_quote
@@ -1496,7 +1496,7 @@ class Long_Future_Trade_Util(Short_Future_Trade_Util):
     logger = LoggerGetter()
 
     def __init__(self, zl_quote: Quote, api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Book) -> None:
+                 trade_book: Trade_Sheet) -> None:
         super().__init__(zl_quote, api, symbol_config, trade_book)
         symbol = self._zl_quote.underlying_symbol
         self._current_trade: Future_Trade_Long = Future_Trade_Long(

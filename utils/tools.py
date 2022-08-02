@@ -6,11 +6,9 @@ from datetime import datetime
 import xlwings as xw
 
 
-class Trade_Book:
+class Trade_Sheet:
 
-    def __init__(self, symbol):
-        wb = xw.Book()
-        sheet = wb.sheets[0]
+    def __init__(self, symbol: str, sheet: xw.Sheet):
         sheet.range('A1').value = 'No'
         sheet.range('B1').value = '合约名称'
         sheet.range('C1').value = '多空'
@@ -25,9 +23,6 @@ class Trade_Book:
         sheet.range('L1').value = '手数'
         self.sheet = sheet
         self.count = 1
-        self.wb = wb
-        symbol_list = examine_symbol(symbol)
-        self.name = f'{symbol_list[2]}.xlsx'
 
     def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, sell_cond,
                      price, pos):
@@ -95,6 +90,36 @@ class Trade_Book:
         st.range((self.count, 12)).value = pos
         st.autofit(axis="columns")
         return self.count - 1
+
+    def _get_name(self, zl_symbol) -> str:
+        symbol_list = examine_symbol(zl_symbol)
+        name = f'{symbol_list[2]}'
+        return name
+
+
+class Trade_Book:
+
+    def __init__(self):
+        wb = xw.Book()
+        self.sheets: dict(str, Trade_Sheet) = {}
+        self.name = 'future_test.xlsx'
+        self.wb = wb
+
+    def create_sheet(self, zl_symbol) -> Trade_Sheet:
+        name = self._get_name(zl_symbol)
+        if not self.sheets.get(name, 0):
+            self.wb.sheets.add(name)
+            self.sheets[name] = Trade_Sheet(zl_symbol, self.wb.sheets[name])
+        return self.sheets[name]
+
+    def _get_name(self, zl_symbol) -> str:
+        symbol_list = examine_symbol(zl_symbol)
+        name = f'{symbol_list[2]}'
+        return name
+
+    def get_sheet(self, symbol) -> Trade_Sheet:
+        symbol_list = examine_symbol(symbol)
+        return self.sheets[symbol_list[1]]
 
     def finish(self):
         self.wb.save(self.name)

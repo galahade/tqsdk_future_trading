@@ -16,10 +16,11 @@ def wait_to_trade(api: TqApi) -> None:
     trade_config = get_trade_config()
     ftu_list = []
     symbols_config = trade_config['rules']
+    tb = Trade_Book()
     for symbol_config in symbols_config:
         if symbol_config['is_active']:
-            tb = Trade_Book(symbol_config['symbol'])
-            ftu = Future_Trade_Util(api, symbol_config, tb)
+            trade_sheet = tb.create_sheet(symbol_config['symbol'])
+            ftu = Future_Trade_Util(api, symbol_config, trade_sheet)
             ftu_list.append(ftu)
     logger.debug("准备开始交易，调用天勤接口，等待交易时机")
 
