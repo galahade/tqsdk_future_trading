@@ -239,8 +239,8 @@ def is_decline_2p(kline, l_kline) -> bool:
 
     result = (l_kline.close - kline.close)/l_kline.close
     logger.debug(log_str.format(
-        get_date_str(kline.datetime),
-        get_date_str(l_kline.datetime),
+        get_date(kline.datetime),
+        get_date(l_kline.datetime),
         kline.close, l_kline.close, result))
     if result > 0.02:
         return True
