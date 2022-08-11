@@ -1350,8 +1350,8 @@ class Future_Trade_Util:
         self._short_ftu = Short_Future_Trade_Util(
             self._zl_quote, api, symbol_config, trade_book)
         self._ftu_list: list(Future_Trade_Util) = []
-        # self._ftu_list.append(self._long_ftu)
-        self._ftu_list.append(self._short_ftu)
+        self._ftu_list.append(self._long_ftu)
+        # self._ftu_list.append(self._short_ftu)
         self._tb = trade_book
 
     def _is_time_to_switch_month(self, quote: Quote, ts: Trade_Status) -> bool:
