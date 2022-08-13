@@ -14,8 +14,8 @@ def trade(start_year, start_month, end_year):
 
     logger.debug(f"回测开始日期：{start_time} 结束日期：{end_time}")
     try:
-        # api = TqApi(acc,
-        api = TqApi(acc, web_gui=":10000",
+        api = TqApi(acc,
+        # api = TqApi(acc, web_gui=":10000",
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
                     auth=TqAuth("galahade", "wombat-gazette-pillory"))
         wait_to_trade(api)
@@ -28,5 +28,5 @@ def trade(start_year, start_month, end_year):
 
         # 账户交易信息统计结果
         # print("tqsdk stat:", acc.tqsdk_stat)
-        # while True:
-        # api.wait_update()
+        while True:
+            api.wait_update()

@@ -31,9 +31,10 @@ def wait_to_trade(api: TqApi) -> None:
                 ftu.start_trading()
 
     except BacktestFinished:
-        for ftu in ftu_list:
-            ftu._tb.finish()
-        raise BacktestFinished(api)
+        try:
+            tb.finish()
+        finally:
+            raise BacktestFinished(api)
 
 
 def get_trade_config() -> dict:

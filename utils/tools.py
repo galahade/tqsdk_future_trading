@@ -21,11 +21,14 @@ class Trade_Sheet:
         sheet.range('J1').value = '平仓价格'
         sheet.range('K1').value = '平仓条件'
         sheet.range('L1').value = '手数'
+        sheet.range('M1').value = '浮动盈亏'
+        sheet.range('N1').value = '手续费'
+        sheet.range('O1').value = '账户权益'
         self.sheet = sheet
         self.count = 1
 
     def r_l_open_pos(self, symbol, t_time, d_cond, h2_cond, sell_cond,
-                     price, pos):
+                     price, pos, commission, balance):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{},2小时:{}'
@@ -38,11 +41,13 @@ class Trade_Sheet:
         st.range((self.count, 7)).value = cond_str.format(d_cond, h2_cond)
         st.range((self.count, 8)).value = sell_cond
         st.range((self.count, 12)).value = pos
+        st.range((self.count, 14)).value = commission
+        st.range((self.count, 15)).value = balance
         st.autofit(axis="columns")
         return self.count - 1
 
     def r_lv_open_pos(self, symbol, t_time, d_cond, h2_cond, sell_cond,
-                      price, pos):
+                      price, pos, commission, balance):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{},2小时:{},虚拟开仓'
@@ -55,10 +60,13 @@ class Trade_Sheet:
         st.range((self.count, 7)).value = cond_str.format(d_cond, h2_cond)
         st.range((self.count, 8)).value = sell_cond
         st.range((self.count, 12)).value = pos
+        st.range((self.count, 14)).value = commission
+        st.range((self.count, 15)).value = balance
         return self.count - 1
 
     def r_sold_pos(self, symbol: str, num: int, t_time: str, sold_reason: str,
-                   price: float, pos: int, l_or_s: bool):
+                   price: float, pos: int, float_profit: float,
+                   commission: float, balance: float, l_or_s: bool):
         self.count += 1
         st = self.sheet
         st.range((self.count, 1)).value = num
@@ -73,9 +81,13 @@ class Trade_Sheet:
         st.range((self.count, 10)).value = price
         st.range((self.count, 11)).value = sold_reason
         st.range((self.count, 12)).value = pos
+        st.range((self.count, 13)).value = float_profit
+        st.range((self.count, 14)).value = commission
+        st.range((self.count, 15)).value = balance
         st.autofit(axis="columns")
 
-    def r_s_open_pos(self, symbol, t_time, d_cond, sell_cond, price, pos):
+    def r_s_open_pos(self, symbol, t_time, d_cond, sell_cond, price, pos,
+                     commission, balance):
         self.count += 1
         st = self.sheet
         cond_str = '日线:{}'
@@ -88,6 +100,8 @@ class Trade_Sheet:
         st.range((self.count, 7)).value = cond_str.format(d_cond)
         st.range((self.count, 8)).value = sell_cond
         st.range((self.count, 12)).value = pos
+        st.range((self.count, 14)).value = commission
+        st.range((self.count, 15)).value = balance
         st.autofit(axis="columns")
         return self.count - 1
 
@@ -233,15 +247,15 @@ def is_nline(kline) -> bool:
 
 
 def is_decline_2p(kline, l_kline) -> bool:
-    logger = get_logger()
-    log_str = ('当前K线生成时间{},上一根K线生成时间{},'
-               '当前K线收盘价{},上一根K线收盘价{}, 跌幅{}')
+    # logger = get_logger()
+    # log_str = ('当前K线生成时间{},上一根K线生成时间{},'
+    #            '当前K线收盘价{},上一根K线收盘价{}, 跌幅{}')
 
     result = (l_kline.close - kline.close)/l_kline.close
-    logger.debug(log_str.format(
-        get_date(kline.datetime),
-        get_date(l_kline.datetime),
-        kline.close, l_kline.close, result))
+    # logger.debug(log_str.format(
+    #     get_date(kline.datetime),
+    #     get_date(l_kline.datetime),
+    #     kline.close, l_kline.close, result))
     if result > 0.02:
         return True
     return False
