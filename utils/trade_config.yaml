@@ -41,7 +41,7 @@ rules:
     long: *long
     short: *short
   - symbol: KQ.m@DCE.i
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long:

@@ -2,7 +2,7 @@ from math import floor
 from tqsdk.objs import Quote, Position, Account
 from tqsdk import TqApi, TargetPosTask, tafunc
 from utils.tools import Trade_Sheet, get_date_str, get_date, diff_two_value,\
-    calc_indicator, examine_symbol, is_nline, is_decline_2p
+    calc_indicator, examine_symbol, is_nline
 from utils.common import LoggerGetter, TradeConfigGetter
 from datetime import datetime
 
@@ -117,14 +117,20 @@ class Trade_Status:
         time_num = int(t_time.time().strftime("%H%M%S"))
         return 150000 > time_num > 145500
 
-    def record_sell_to_excel(self, t_time: str, sold_reason: str,
-                             price: float, pos: int) -> None:
+    def record_sell_to_excel(
+         self, t_time: str, sold_reason: str,
+         price: float, pos: int, float_profit: float) -> None:
         '''抽象方法，在excel中插入卖出记录
         '''
         pass
 
     def _get_pos_number(self) -> int:
         '''抽象方法,返回当前合约持仓量
+        '''
+        pass
+
+    def get_float_profit(self) -> float:
+        '''抽象方法,返回当前浮动盈亏
         '''
         pass
 
@@ -231,8 +237,6 @@ class Trade_Status_Short(Trade_Status):
 
     def _record_to_excel(self) -> None:
         buy_str = '止损:{},止盈:{}'
-        logger = self.logger
-        logger.debug(f'position : {self._pos}')
         self.tb_count = self._tb.r_s_open_pos(
             self._symbol, self.get_current_date_str(),
             self._daily_cond,
@@ -243,13 +247,12 @@ class Trade_Status_Short(Trade_Status):
             self._account.balance
         )
 
-    def record_sell_to_excel(self, t_time: str, sold_reason: str,
-                             price: float, pos: int) -> None:
-        logger = self.logger
-        logger.debug(f'position : {self._pos}')
+    def record_sell_to_excel(
+         self, t_time: str, sold_reason: str,
+         price: float, pos: int, float_profit: float) -> None:
         self._tb.r_sold_pos(
             self._symbol, self.tb_count, t_time, sold_reason, price,
-            pos, self._pos.float_profit_short, self._account.commission,
+            pos, float_profit, self._account.commission,
             self._account.balance, False)
 
     def reset(self):
@@ -259,6 +262,9 @@ class Trade_Status_Short(Trade_Status):
         '''返回当前合约持仓量
         '''
         return self._pos.pos_short
+
+    def get_float_profit(self) -> float:
+        return self._pos.float_profit_short
 
     def _get_open_price(self) -> float:
         return self._pos.open_price_short
@@ -451,17 +457,21 @@ class Trade_Status_Long(Trade_Status):
         self._h2_cond = 0
         self._profit_cond = 0
 
-    def record_sell_to_excel(self, t_time: str, sold_reason: str,
-                             price: float, pos: int) -> None:
+    def record_sell_to_excel(
+         self, t_time: str, sold_reason: str,
+         price: float, pos: int, float_profit: float) -> None:
         self._tb.r_sold_pos(
             self._symbol, self.tb_count, t_time, sold_reason, price, pos,
-            self._pos.float_profit_short, self._account.commission,
+            float_profit, self._account.commission,
             self._account.balance, True)
 
     def _get_pos_number(self) -> int:
         '''返回当前合约持仓量
         '''
         return self._pos.pos_long
+
+    def get_float_profit(self) -> float:
+        return self._pos.float_profit_long
 
     def _get_open_price(self) -> float:
         return self._pos.open_price_long
@@ -477,6 +487,9 @@ class Trade_Status_Virtual(Trade_Status_Long):
             return self._pos_quantity
         else:
             return 0
+
+    def get_float_profit(self) -> float:
+        return 0
 
     def _get_open_price(self) -> float:
         return self.get_current_price()
@@ -497,8 +510,9 @@ class Trade_Status_Virtual(Trade_Status_Long):
             self._account.balance
         )
 
-    def record_sell_to_excel(self, t_time: str, sold_reason: str,
-                             price: float, pos: int) -> None:
+    def record_sell_to_excel(
+         self, t_time: str, sold_reason: str,
+         price: float, pos: int, float_profit: float) -> None:
         sold_reason = str(sold_reason) + '虚拟售出'
         self._tb.r_sold_pos(
             self._symbol, self.tb_count, t_time, sold_reason, price, pos, 0,
@@ -613,10 +627,21 @@ class Future_Trade:
                 break
         return target_pos
 
-    def _closeout(self) -> None:
+    def _closeout(self, sale_reason: str) -> None:
         pos_number = self._ts._get_pos_number()
-        self._trade_pos(pos_number, pos_number)
+        self._sell_and_record_pos(pos_number, sale_reason)
         self._ts.reset()
+
+    def _sell_and_record_pos(self, sale_pos: int, sale_reason: str) -> int:
+        ts = self._ts
+        trade_time = ts.get_current_date_str()
+        price = ts.get_current_price()
+        total_pos = ts._get_pos_number()
+        float_profit = ts.get_float_profit()
+        rest_pos = self._trade_pos(total_pos, sale_pos)
+        ts.record_sell_to_excel(trade_time, sale_reason, price, sale_pos,
+                                float_profit)
+        return rest_pos
 
     def get_quote(self) -> Quote:
         return self._quote
@@ -625,16 +650,16 @@ class Future_Trade:
         logger = self.logger
         ts = self._ts
         trade_time = ts.get_current_date_str()
+        s = self._symbol
         price = ts.get_current_price()
+        log_str = '{} {} <多空> {},现价:{},止损价:{},手数:{}'
         if ts.get_stoplose_status():
             stop_loss_price = 0
             pos = self._ts._get_pos_number()
             stop_loss_price = ts._stop_loss_price
-            ts.record_sell_to_excel(trade_time, ts.sl_message, price, pos)
-            logger.info(f'{trade_time}<多空>{ts.sl_message},现价:{price},'
-                        f'止损价:{stop_loss_price},手数:{pos},'
-                        f'止盈开始价:{ts._stop_profit_point}')
-            self._closeout()
+            self._closeout(ts.sl_message)
+            logger.info(log_str.format(
+                trade_time, s, ts.sl_message, price, stop_loss_price, pos))
 
     def _try_stop_profit(self) -> None:
         ''' 止盈抽象方法，需要多_空子类重写
@@ -750,11 +775,8 @@ class Future_Trade:
             hold_pos = ts._get_pos_number()
             logger = self.logger
             log_str = '换月清仓,售出数量{}'
-            trade_time = ts.get_current_date_str()
-            price = ts.get_current_price()
+            self._closeout('换月平仓')
             logger.info(log_str.format(hold_pos))
-            ts.record_sell_to_excel(trade_time, '换月平仓', price, hold_pos)
-            self._closeout()
 
 
 class Future_Trade_Short(Future_Trade):
@@ -923,14 +945,12 @@ class Future_Trade_Short(Future_Trade):
                     t_macd = t_dk['MACD.close']
                     if not is_nline(t_dk) and t_macd > 0:
                         sold_pos = ts._get_pos_number()
+                        self._closeout('趋势止盈')
                         logger.info(log_str.format(
                             trade_time, self._symbol, price, sold_pos,
                             diff22_60, close, macd, get_date(t_dk.datetime),
                             t_macd, t_dk.close, t_dk.open
                         ))
-                        ts.record_sell_to_excel(trade_time,
-                                                '趋势止盈', price, sold_pos)
-                        self._closeout()
                         return
                 ts.stop_trace_profit = True
 
@@ -1274,36 +1294,28 @@ class Future_Trade_Long(Future_Trade):
             result = ts.is_final5_closeout(dk)
             if result:
                 sold_pos = ts._get_pos_number()
+                self._closeout(sp_log.format(ts._profit_cond, '100%'))
                 logger.info(log_str.format(
                     trade_time, s, ts._profit_cond, price,
                     sold_pos, 0, spp))
-                ts.record_sell_to_excel(
-                    trade_time, sp_log.format(ts._profit_cond, '100%'),
-                    price, sold_pos)
-                self._closeout()
         elif ts.get_profit_status() in [4]:
             spp = ts._stop_profit_point
             if ts._profit_stage == 1:
-                sold_pos = ts._get_pos_number()//2
-                rest_pos = self._trade_pos(ts._get_pos_number(), sold_pos)
                 ts._profit_stage = 2
+                sold_pos = ts._get_pos_number()//2
+                rest_pos = self._sell_and_record_pos(
+                    sp_log.format(ts._profit_cond, '50%'), sold_pos)
                 logger.info(log_str.format(
                     trade_time, s, ts._profit_cond, price,
                     sold_pos, rest_pos, spp))
-                ts.record_sell_to_excel(
-                    trade_time, sp_log.format(ts._profit_cond, '50%'),
-                    price, sold_pos)
             elif ts._profit_stage == 2:
                 if (ts.get_current_price() >=
                    ts.calc_price(ts._t_price, True, 3)):
                     sold_pos = ts._get_pos_number()
+                    self._closeout(sp_log.format(ts._profit_cond, '剩余全部'))
                     logger.info(log_str.format(
                         trade_time, s,
                         ts._profit_cond, price, sold_pos, 0, spp))
-                    ts.record_sell_to_excel(
-                        trade_time, sp_log.format(ts._profit_cond, '剩余全部'),
-                        price, sold_pos)
-                    self._closeout()
 
     def buy_pos(self, tsv: Trade_Status_Virtual) -> None:
         '''换月时，如果虚拟交易有持仓，则直接现价买入
