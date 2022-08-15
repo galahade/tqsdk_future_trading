@@ -583,7 +583,8 @@ class Future_Trade:
         return pos
 
     def _can_open_ops(self):
-        if self._ts._get_pos_number() == 0:
+        # if self._ts._get_pos_number() == 0:
+        if self._pos.pos == 0:
             if self._match_dk_cond():
                 if self._match_2hk_cond():
                     if self._match_30mk_cond():
@@ -657,9 +658,9 @@ class Future_Trade:
             stop_loss_price = 0
             pos = self._ts._get_pos_number()
             stop_loss_price = ts._stop_loss_price
-            self._closeout(ts.sl_message)
             logger.info(log_str.format(
                 trade_time, s, ts.sl_message, price, stop_loss_price, pos))
+            self._closeout(ts.sl_message)
 
     def _try_stop_profit(self) -> None:
         ''' 止盈抽象方法，需要多_空子类重写
@@ -1304,7 +1305,7 @@ class Future_Trade_Long(Future_Trade):
                 ts._profit_stage = 2
                 sold_pos = ts._get_pos_number()//2
                 rest_pos = self._sell_and_record_pos(
-                    sp_log.format(ts._profit_cond, '50%'), sold_pos)
+                    sold_pos, sp_log.format(ts._profit_cond, '50%'))
                 logger.info(log_str.format(
                     trade_time, s, ts._profit_cond, price,
                     sold_pos, rest_pos, spp))
@@ -1346,12 +1347,17 @@ class Future_Trade_Long_Virtual(Future_Trade_Long):
             self._account, self._pos, symbol,
             self._quote, trade_book, self._ts._rules)
 
-    def _closeout(self):
-        '''重写父类方法，不进行实际交易，只重置交易状态。
-        '''
+    def _sell_and_record_pos(self, sale_pos: int, sale_reason: str) -> int:
         logger = self.logger
         logger.debug('虚拟交易清仓')
-        self._ts.reset()
+        ts = self._ts
+        trade_time = ts.get_current_date_str()
+        price = ts.get_current_price()
+        total_pos = ts._get_pos_number()
+        rest_pos = total_pos - sale_pos
+        ts.record_sell_to_excel(trade_time, sale_reason, price, sale_pos,
+                                0)
+        return rest_pos
 
     def _trade_pos(self, total_pos, sale_pos):
         logger = self.logger
@@ -1377,7 +1383,7 @@ class Future_Trade_Util:
         self._short_ftu = Short_Future_Trade_Util(
             self._zl_quote, api, symbol_config, trade_book)
         self._ftu_list: list(Future_Trade_Util) = []
-        # self._ftu_list.append(self._long_ftu)
+        self._ftu_list.append(self._long_ftu)
         self._ftu_list.append(self._short_ftu)
         self._tb = trade_book
 
@@ -1473,6 +1479,7 @@ class Future_Trade_Util:
         ))
         self.calc_indicators(1)
         self.switch_trade()
+        # print(self._short_ftu._current_trade._pos)
         # self.trading_close_operation()
 
     def trading_close_operation(self) -> None:
