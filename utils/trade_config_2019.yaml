@@ -20,6 +20,7 @@ defaults:
       - 6
       - 9
       - 12
+    main_list_2: &main_list_2
     long: &long
       buy_pos_scale: 0.02
       base_scale: 0.02
@@ -39,13 +40,13 @@ defaults:
       promote_target: 1
 rules:
   - symbol: KQ.m@SHFE.rb
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_1
     long: *long
     short: *short
   - symbol: KQ.m@DCE.i
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long:
@@ -55,13 +56,13 @@ rules:
       <<: *short
       buy_pos_scale: 0.002
   - symbol: KQ.m@DCE.p
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
     short: *short
   - symbol: KQ.m@DCE.j
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long:
@@ -71,7 +72,7 @@ rules:
       <<: *short
       buy_pos_scale: 0.002
   - symbol: KQ.m@DCE.jm
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long:
@@ -81,13 +82,13 @@ rules:
       <<: *short
       buy_pos_scale: 0.0033
   - symbol: KQ.m@DCE.m
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
     short: *short
   - symbol: KQ.m@DCE.y
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
@@ -99,15 +100,117 @@ rules:
     long: *long
     short: *short
   - symbol: KQ.m@DCE.cs
-    is_active: False
+    is_active: True
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
     short: *short
   - symbol: KQ.m@DCE.l
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.04
+    short:
+      <<: *short
+      buy_pos_scale: 0.04
+  - symbol: KQ.m@DCE.v
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.04
+    short:
+      <<: *short
+      buy_pos_scale: 0.04
+  - symbol: KQ.m@DCE.pp
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.04
+    short:
+      <<: *short
+      buy_pos_scale: 0.04
+  - symbol: KQ.m@CZCE.ta
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.04
+    short:
+      <<: *short
+      buy_pos_scale: 0.04
+  - symbol: KQ.m@CZCE.ap
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long: *long
+    short: *short
+  - symbol: KQ.m@CZCE.fg
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.01
+    short:
+      <<: *short
+      buy_pos_scale: 0.01
+  - symbol: KQ.m@CZCE.ta
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.04
+    short:
+      <<: *short
+      buy_pos_scale: 0.04
+  - symbol: KQ.m@CZCE.oi
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_2
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.hc
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_1
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.bu
+    is_active: True
+    switch_days: *switch_days
+    main_list: *main_list_4
+    long: *long
+    short: *short
+
+
+
+
+
+
+
+
+  - symbol: KQ.m@DCE.jd
     is_active: False
     switch_days: *switch_days
     main_list: *main_list_2
+    long:
+      <<: *long
+      buy_pos_scale: 0.04
+    short:
+      <<: *short
+      buy_pos_scale: 0.04
+  - symbol: KQ.m@DCE.lh
+    is_active: False
+    switch_days: *switch_days
+    main_list: *main_list_3
     long:
       <<: *long
       buy_pos_scale: 0.04
@@ -124,67 +227,9 @@ rules:
     short:
       <<: *short
       buy_pos_scale: 0.04
-  - symbol: KQ.m@DCE.pp
+  - symbol: KQ.m@DCE.eg
     is_active: False
     switch_days: *switch_days
     main_list: *main_list_2
-    long:
-      <<: *long
-      buy_pos_scale: 0.04
-    short:
-      <<: *short
-      buy_pos_scale: 0.04
-  - symbol: KQ.m@CZCE.TA
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_2
-    long:
-      <<: *long
-      buy_pos_scale: 0.04
-    short:
-      <<: *short
-      buy_pos_scale: 0.04
-  - symbol: KQ.m@CZCE.AP
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_2
-    long: *long
-    short: *short
-  - symbol: KQ.m@CZCE.FG
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_2
-    long:
-      <<: *long
-      buy_pos_scale: 0.01
-    short:
-      <<: *short
-      buy_pos_scale: 0.01
-  - symbol: KQ.m@CZCE.CF
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_2
-    long:
-      <<: *long
-      buy_pos_scale: 0.04
-    short:
-      <<: *short
-      buy_pos_scale: 0.04
-  - symbol: KQ.m@CZCE.OI
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_2
-    long: *long
-    short: *short
-  - symbol: KQ.m@SHFE.hc
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_1
-    long: *long
-    short: *short
-  - symbol: KQ.m@SHFE.bu
-    is_active: False
-    switch_days: *switch_days
-    main_list: *main_list_4
     long: *long
     short: *short

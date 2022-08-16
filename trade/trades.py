@@ -1383,7 +1383,7 @@ class Future_Trade_Util:
         self._short_ftu = Short_Future_Trade_Util(
             self._zl_quote, api, symbol_config, trade_book)
         self._ftu_list: list(Future_Trade_Util) = []
-        self._ftu_list.append(self._long_ftu)
+        # self._ftu_list.append(self._long_ftu)
         self._ftu_list.append(self._short_ftu)
         self._tb = trade_book
 
@@ -1631,9 +1631,9 @@ class Long_Future_Trade_Util(Short_Future_Trade_Util):
                     today_symbol_list[1] != last_symbol_list[1]:
                 logger.warning('新/旧合约品种不一，请检验')
                 return False
-            if n_symbol <= c_symbol:
-                logger.warning('新合约非远月合约，不换月')
-                return False
+            # if n_symbol <= c_symbol:
+            #     logger.warning('新合约非远月合约，不换月')
+            #     return False
             return self._is_time_to_switch_month(trade._quote, trade._ts)
         return False
 
