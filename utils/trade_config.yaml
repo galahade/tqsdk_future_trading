@@ -71,7 +71,7 @@ rules:
       <<: *short
       buy_pos_scale: 0.002
   - symbol: KQ.m@DCE.jm
-    is_active: False
+    is_active: 0
     switch_days: *switch_days
     main_list: *main_list_2
     long:
@@ -81,19 +81,19 @@ rules:
       <<: *short
       buy_pos_scale: 0.0033
   - symbol: KQ.m@DCE.m
-    is_active: False
+    is_active: 0
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
     short: *short
   - symbol: KQ.m@DCE.y
-    is_active: False
+    is_active: 0
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
     short: *short
   - symbol: KQ.m@DCE.c
-    is_active: True
+    is_active: 0
     switch_days: *switch_days
     main_list: *main_list_2
     long: *long
@@ -177,7 +177,7 @@ rules:
     long: *long
     short: *short
   - symbol: KQ.m@SHFE.hc
-    is_active: False
+    is_active: 1
     switch_days: *switch_days
     main_list: *main_list_1
     long: *long

@@ -17,7 +17,7 @@ def trade(start_year, start_month, end_year):
         # api = TqApi(acc,
         api = TqApi(acc, web_gui=":10000",
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
-                    auth=TqAuth("galahade", "wombat-gazette-pillory"))
+                    auth=TqAuth("galahade", "211212"))
         wait_to_trade(api)
 
     except BacktestFinished:
