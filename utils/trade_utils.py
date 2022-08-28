@@ -11,7 +11,7 @@ def get_logger():
 
 # 调用该方法执行交易策略，等待合适的交易时机进行交易。
 # api：天勤量化api对象，ftu：主力合约交易对象
-def wait_to_trade(api: TqApi) -> None:
+def wait_to_trade(api: TqApi, trade_type: int) -> None:
     logger = get_logger()
     trade_config = get_trade_config()
     ftu_list = []
@@ -20,7 +20,8 @@ def wait_to_trade(api: TqApi) -> None:
     for symbol_config in symbols_config:
         if symbol_config['is_active']:
             trade_sheet = tb.create_sheet(symbol_config['symbol'])
-            ftu = Future_Trade_Util(api, symbol_config, trade_sheet)
+            ftu = Future_Trade_Util(api, symbol_config, trade_sheet,
+                                    trade_type)
             ftu_list.append(ftu)
     logger.debug("准备开始交易，调用天勤接口，等待交易时机")
 

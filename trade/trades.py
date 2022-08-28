@@ -1373,19 +1373,32 @@ class Future_Trade_Util:
     logger = LoggerGetter()
 
     def __init__(self,  api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Sheet) -> None:
+                 trade_book: Trade_Sheet, trade_type=2) -> None:
+        ''' trade_type:代表要执行的策略类型
+        0: short，1: long，2: all
+        '''
         self._api = api
         symbol = symbol_config['symbol']
         self._mains = symbol_config['main_list']
         self._zl_quote = api.get_quote(symbol)
-        self._long_ftu = Long_Future_Trade_Util(
-            self._zl_quote, api, symbol_config, trade_book)
-        self._short_ftu = Short_Future_Trade_Util(
-            self._zl_quote, api, symbol_config, trade_book)
-        self._ftu_list: list(Future_Trade_Util) = []
-        self._ftu_list.append(self._long_ftu)
-        # self._ftu_list.append(self._short_ftu)
         self._tb = trade_book
+        self._ftu_list: list(Future_Trade_Util) = []
+        if trade_type:
+            if trade_type == 1:
+                self._long_ftu = Long_Future_Trade_Util(
+                    self._zl_quote, api, symbol_config, trade_book)
+                self._ftu_list.append(self._long_ftu)
+            else:
+                self._long_ftu = Long_Future_Trade_Util(
+                    self._zl_quote, api, symbol_config, trade_book)
+                self._short_ftu = Short_Future_Trade_Util(
+                    self._zl_quote, api, symbol_config, trade_book)
+                self._ftu_list.append(self._long_ftu)
+                self._ftu_list.append(self._short_ftu)
+        else:
+            self._short_ftu = Short_Future_Trade_Util(
+                self._zl_quote, api, symbol_config, trade_book)
+            self._ftu_list.append(self._short_ftu)
 
     def _is_time_to_switch_month(self, quote: Quote, ts: Trade_Status) -> bool:
         trade_time = get_date_str(quote.datetime)

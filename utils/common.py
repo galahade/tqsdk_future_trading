@@ -17,6 +17,8 @@ def get_argumets():
 
     _parser.add_argument("-l", "--log", choices=["warning", "info", "debug"],
                          help="日志级别，默认为warning", default="warning")
+    _parser.add_argument("-tt", "--trade_type", type=int, default=2,
+                         help="交易类型, 0:做空,1:做多,2:多空")
 
     _bt_group = _parser.add_argument_group('回测参数分组', '如果进行回测，\
                                         使用该参数组指定相关参数')
@@ -31,6 +33,7 @@ def get_argumets():
     args = _parser.parse_args()
     __main__.is_back_test = args.backtest
     __main__.log_level = args.log
+    __main__.trade_type = args.trade_type
     if args.backtest:
         if now.year < args.start_year:
             sys.exit(f"回测开始年份{args.start_year},晚于当前年份{now.year}，参数错误.")

@@ -7,7 +7,7 @@ import logging
 acc = TqSim()
 
 
-def trade(start_year, start_month, end_year):
+def trade(trade_type, start_year, start_month, end_year):
     logger = logging.getLogger(__name__)
     start_time = date(start_year, start_month, 1)
     end_time = date(end_year, 12, 31)
@@ -18,7 +18,7 @@ def trade(start_year, start_month, end_year):
         api = TqApi(acc, web_gui=":10000",
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
                     auth=TqAuth("galahade", "211212"))
-        wait_to_trade(api)
+        wait_to_trade(api, trade_type)
 
     except BacktestFinished:
         logger.info(f"回测完成:结束时间:{end_time}")
