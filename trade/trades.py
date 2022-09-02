@@ -1,544 +1,14 @@
 from math import floor
-from tqsdk.objs import Quote, Position, Account
+from tqsdk.objs import Quote
 from tqsdk import TqApi, TargetPosTask, tafunc
-from utils.tools import Trade_Sheet, get_date_str, get_date, diff_two_value,\
-    calc_indicator, examine_symbol, is_nline
-from utils.common import LoggerGetter, TradeConfigGetter
+from utils.tools import get_date_str, get_date, diff_two_value,\
+    calc_indicator, is_nline
+from utils.common import LoggerGetter
 from datetime import datetime
-
-
-class Trade_Status:
-    logger = LoggerGetter()
-    buy_pos_scale = TradeConfigGetter()
-
-    def __init__(self, account: Account, position: Position, symbol: str,
-                 quote: Quote, tb: Trade_Sheet, rules: dict) -> None:
-        self._account = account
-        self._pos = position
-        self._quote = quote
-        self.is_trading = False
-        self._tb = tb
-        self._symbol = symbol
-        self.tb_count = 0
-        self._rules = rules
-        self.p_l_ratio = self.base_scale
-        self.sl_message = '止损'
-        self.stop_trace_profit = False
-        self.use_ps_ratio = False
-
-    def set_last_daily_kline(self, cond_num, kline):
-        ''' 设置符合开仓条件的日线，并记录符合第几个日线条件
-        '''
-        self._daily_kline = kline
-        self._daily_cond = cond_num
-
-    def set_last_h2_kline(self, kline):
-        self._h2_kline = kline
-
-    def set_last_m30_kline(self, kline):
-        self._m30_kline = kline
-
-    def set_deal_info(self, pos: int) -> None:
-        logger = self.logger
-        if self.is_trading:
-            logger.warning("无法创建Trade_Status, 交易进行中。")
-        self.is_trading = True
-        self.open_pos_date = tafunc.time_to_datetime(
-            self._quote.datetime)
-        self._set_stop_profit_values()
-        self._set_sale_prices(pos)
-        self._record_to_excel()
-
-    def get_stoplose_status(self) -> bool:
-        '''抽象方法，返回是否需要止损
-        '''
-        pass
-
-    def get_profit_status(self) -> bool:
-        '''抽象方法，返回是否需要止盈
-        '''
-        pass
-
-    def get_current_price(self) -> float:
-        '''接口，返回当前交易价格
-        '''
-        return self._quote.last_price
-
-    def get_current_date_str(self):
-        '''接口,返回当前交易时间
-        '''
-        return get_date_str(self._quote.datetime)
-
-    def reset(self):
-        '''接口，需要子类增加逻辑，重置内部变量状态
-        '''
-        self.is_trading = False
-        self._has_improved_sl_price = False
-        self._stop_loss_price = 0.0
-        self._begin_stop_profit = False
-        self._stop_profit_point = 0.0
-        self._profit_stage = 0
-        self._t_price = 0.0
-        self._pos_quantity = 0
-        self._daily_cond = 0
-        self.p_l_ratio = self.base_scale
-        self.sl_message = '止损'
-        self.stop_trace_profit = False
-        self.use_ps_ratio = False
-
-    def calc_price(self, price: float, is_add: bool, scale: float) -> float:
-        '''类方法，按盈亏比计算目标价格
-        '''
-        if is_add:
-            return round(price * (1 + self.p_l_ratio * scale), 2)
-        else:
-            return round(price * (1 - self.p_l_ratio * scale), 2)
-
-    def _set_sale_prices(self, pos: int) -> None:
-        '''抽象方法，设置止盈止损价格
-        当买入成交后，按成交价格设置目标止损价和止盈起始价
-        '''
-        pass
-
-    def _set_stop_profit_values(self) -> None:
-        '''抽象方法，设置止盈类型和止盈阶段
-        '''
-        self._profit_stage = 0
-
-    def _record_to_excel(self) -> None:
-        '''抽象方法，将开仓记录保存到excel中
-        '''
-        pass
-
-    def _is_last_5_m(self) -> bool:
-        '''判断交易时间是否为当日最后5分钟
-        '''
-        t_time = tafunc.time_to_datetime(self._quote.datetime)
-        time_num = int(t_time.time().strftime("%H%M%S"))
-        return 150000 > time_num > 145500
-
-    def record_sell_to_excel(
-         self, t_time: str, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        '''抽象方法，在excel中插入卖出记录
-        '''
-        pass
-
-    def _get_pos_number(self) -> int:
-        '''抽象方法,返回当前合约持仓量
-        '''
-        pass
-
-    def get_float_profit(self) -> float:
-        '''抽象方法,返回当前浮动盈亏
-        '''
-        pass
-
-    def get_Kline_values(self, kline) -> tuple:
-        ema9 = kline.ema9
-        ema22 = kline.ema22
-        ema60 = kline.ema60
-        macd = kline['MACD.close']
-        close = kline.close
-        open_p = kline.open
-        trade_time = self.get_current_date_str()
-        return (ema9, ema22, ema60, macd, close, open_p, trade_time)
-
-
-class Trade_Status_Short(Trade_Status):
-    logger = LoggerGetter()
-    base_scale = TradeConfigGetter()
-    profit_start_scale = TradeConfigGetter()
-    promote_scale = TradeConfigGetter()
-    promote_target = TradeConfigGetter()
-    stop_loss_scale = TradeConfigGetter()
-    adjusted_base_scale = TradeConfigGetter()
-
-    def get_stoplose_status(self) -> bool:
-        if self.is_trading:
-            pos = self._get_pos_number()
-            price = self.get_current_price()
-            if pos > 0 and price >= self._stop_loss_price:
-                return True
-        return False
-
-    def try_improve_sl_price(self) -> None:
-        '''尝试提高止损价
-        当盈亏比达到1:10后将止损价格提升至1:5
-        '''
-        logger = self.logger
-        price = self.get_current_price()
-        trade_time = self.get_current_date_str()
-        log_str = '{}<做空>现价{}达到1:{}盈亏比,将止损价提高至{}'
-        o_price = self._pos.open_price_short
-        calc_price = self.calc_price
-        promote_price = calc_price(o_price, False, self.promote_scale)
-        if (hasattr(self, "_has_improved_sl_price")
-           and self._has_improved_sl_price):
-            return
-        else:
-            if (self._profit_stage == 0 and price <= promote_price):
-                self._stop_loss_price = calc_price(o_price, False,
-                                                   self.promote_target)
-                self._profit_stage = 1
-                logger.debug(log_str.format(
-                    trade_time, price, self.promote_scale,
-                    self._stop_loss_price))
-                self.sl_message = '跟踪止盈'
-                self._has_improved_sl_price = True
-
-    def get_profit_status(self, dk) -> bool:
-        '''返回是否满足止盈条件。当第一次符合止盈条件时，设置相关止盈参数
-        '''
-        if self.is_trading:
-            e9, e22, e60, macd, close, open_p, trade_time =\
-                self.get_Kline_values(dk)
-            # if (diff_two_value(e22, e60) > 3 and e60 > e22 > e9
-            if (e60 > e22 > e9 and not self.stop_trace_profit):
-                return True
-            elif self.stop_trace_profit:
-                if close < e9:
-                    self.stop_trace_profit = False
-        return False
-
-    def is_final5_closeout(self, dk):
-        '''在当日交易结束前5分钟，判断是否应该清仓
-        可返回2种状态：
-        1. True 应该清仓
-        2. False 不清仓
-        '''
-        logger = self.logger
-        log_str = ('{}<做空>满足最后5分钟止盈,当前价:{},'
-                   '日线EMA9:{},日线EMA22:{},MACD:{}')
-        ema9 = dk.ema9
-        ema22 = dk.ema22
-        macd = dk['MACD.close']
-        price = self.get_current_price()
-        trade_time = self.get_current_date_str()
-        if self._is_last_5_m():
-            if (macd > 0 and price > ema9):
-                logger.debug(log_str.format(
-                    trade_time, price, ema9, ema22, macd))
-                return True
-        return False
-
-    def _set_sale_prices(self, pos: int) -> None:
-        open_pos_price = self._get_open_price()
-        trade_time = self.get_current_date_str()
-        self._t_price = open_pos_price
-        self._pos_quantity = self._get_pos_number()
-        self._stop_loss_price = self.calc_price(open_pos_price, True,
-                                                self.stop_loss_scale)
-        self._stop_profit_point = self.calc_price(open_pos_price, False,
-                                                  self.profit_start_scale)
-        self.logger.info(f'{trade_time}'
-                         f'<做空>止损设为:{self._stop_loss_price}'
-                         f'止盈起始价为:{self._stop_profit_point}')
-
-    def _record_to_excel(self) -> None:
-        buy_str = '止损:{},止盈:{}'
-        self.tb_count = self._tb.r_s_open_pos(
-            self._symbol, self.get_current_date_str(),
-            self._daily_cond,
-            buy_str.format(self._stop_loss_price, self._stop_profit_point),
-            self._pos.open_price_short,
-            self._pos.pos_short,
-            self._account.commission,
-            self._account.balance
-        )
-
-    def record_sell_to_excel(
-         self, t_time: str, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        self._tb.r_sold_pos(
-            self._symbol, self.tb_count, t_time, sold_reason, price,
-            pos, float_profit, self._account.commission,
-            self._account.balance, False)
-
-    def reset(self):
-        super().reset()
-
-    def _get_pos_number(self) -> int:
-        '''返回当前合约持仓量
-        '''
-        return self._pos.pos_short
-
-    def get_float_profit(self) -> float:
-        return self._pos.float_profit_short
-
-    def _get_open_price(self) -> float:
-        return self._pos.open_price_short
-
-    def is_2days_later(self, kline):
-        log_str = '{}<做空>距离交易时间{}达到{}'
-        # trade_time = self.get_current_date_str()
-        today = tafunc.time_to_datetime(kline.datetime)
-        timedelta = today - self.open_pos_date
-        if timedelta.days >= 4 and (not hasattr(self, 'has_2_days') or
-                                    not self.has_2_days):
-            self.has_2_days = True
-            self.logger.debug(
-                log_str.format(
-                    today,
-                    self.open_pos_date,
-                    timedelta.days
-                ))
-            self.logger.debug(timedelta)
-            return True
-        return False
-
-
-class Trade_Status_Long(Trade_Status):
-    logger = LoggerGetter()
-    base_scale = TradeConfigGetter()
-    profit_start_scale_1 = TradeConfigGetter()
-    promote_scale_1 = TradeConfigGetter()
-    promote_target_1 = TradeConfigGetter()
-    profit_start_scale_2 = TradeConfigGetter()
-    promote_scale_2 = TradeConfigGetter()
-    promote_target_2 = TradeConfigGetter()
-    stop_loss_scale = TradeConfigGetter()
-
-    def set_last_h2_kline(self, cond_num, *args):
-        '''重写父类方法。
-        设置符合条件的两小时线，同时记录符合哪个两小时条件。
-        '''
-        super().set_last_h2_kline(*args)
-        self._h2_cond = cond_num
-
-    def get_stoplose_status(self) -> bool:
-        if self.is_trading:
-            pos = self._get_pos_number()
-            price = self.get_current_price()
-            if pos > 0 and price <= self._stop_loss_price:
-                return True
-        return False
-
-    def try_improve_sl_price(self) -> bool:
-        logger = self.logger
-        price = self.get_current_price()
-        trade_time = self.get_current_date_str()
-        log_str = '{}<做多>止盈条件{}现价{}达到1:{}盈亏比,将止损价提高至{}'
-        o_price = self._t_price
-        calc_price = self.calc_price
-        if (hasattr(self, "_has_improved_sl_price") and
-           self._has_improved_sl_price):
-            return
-        else:
-            if self._profit_cond in [1, 2, 3]:
-                standard_price = calc_price(o_price, True,
-                                            self.promote_scale_1)
-                if price >= standard_price:
-                    self._stop_loss_price = calc_price(o_price, True,
-                                                       self.promote_target_1)
-                    logger.debug(log_str.format(
-                        trade_time, 1, price, self.promote_scale_1,
-                        self._stop_loss_price))
-                    self.sl_message = '跟踪止盈'
-                    self._has_improved_sl_price = True
-
-    def get_profit_status(self) -> int:
-        '''返回满足止盈条件的序号，并设置相关止盈参数
-        0:不满足止盈条件
-        1:止盈条件1
-        2:止盈条件2
-        3:止盈条件3
-        4:止盈条件4
-        '''
-        logger = self.logger
-        if self.is_trading:
-            price = self.get_current_price()
-            log_str = ('{}<做多>现价:{} 达到止盈价{}开始监控,'
-                       '止损价提高到:{}')
-            # if price >= 3892:
-            #     logger.debug(f"{self.get_current_date_str()},price:{price}")
-            #     logger.debug(self.__dict__)
-            if hasattr(self, "_begin_stop_profit") and self._begin_stop_profit:
-                return self._profit_cond
-            if price >= self._stop_profit_point:
-                self._begin_stop_profit = True
-                if self._profit_cond == 4:
-                    self._stop_loss_price = self._t_price
-                    self._profit_stage = 1
-                logger.info(log_str.format(
-                    self.get_current_date_str(),
-                    price, self._stop_profit_point,
-                    self._stop_loss_price
-                ))
-                return self._profit_cond
-        return 0
-
-    def update_profit_stage(self, dk, m30k):
-        '''暂时弃用-当开仓后，使用该方法判断是否达到监控止盈条件，
-        当开始监控止盈后，根据最新价格，更新止损价格和止盈阶段
-        为止盈提供依据
-        '''
-        pos = self._get_pos_number()
-        if pos > 0 and self.get_profit_status():
-            if self._profit_stage == 0:
-                self._profit_stage = 1
-            elif self._profit_cond == 0:
-                if self._profit_stage == 1:
-                    self._profit_stage = 2
-
-    def is_final5_closeout(self, dk):
-        '''在当日交易结束前5分钟，判断是否应该清仓
-        可返回2种状态：
-        1. True 应该清仓
-        2. False 不清仓
-        '''
-        logger = self.logger
-        log_str = ('{}<做多>满足最后5分钟止盈,止盈条件:{},当前价:{},'
-                   '日线EMA9:{},日线EMA22:{},EMA60:{}')
-        ema9 = dk.ema9
-        ema22 = dk.ema22
-        ema60 = dk.ema60
-        price = self.get_current_price()
-        trade_time = self.get_current_date_str()
-        if self._is_last_5_m():
-            if (self._profit_cond == 1 and price < ema60 and
-               ema9 < ema22):
-                logger.debug(log_str.format(
-                    trade_time, 1, price, ema9, ema22, ema60))
-                return True
-            elif (self._profit_cond in [2, 3] and price < ema22
-                  and ema9 < ema22):
-                logger.debug(log_str.format(
-                    trade_time, 2, price, ema9, ema22, ema60))
-                return True
-        return False
-
-    def _set_sale_prices(self, pos: int) -> None:
-        open_pos_price = self._get_open_price()
-        current_date = self.get_current_date_str()
-        self._t_price = open_pos_price
-        self._pos_quantity = self._get_pos_number()
-        self._stop_loss_price = self.calc_price(open_pos_price, False,
-                                                self.stop_loss_scale)
-        if self._profit_cond in [1, 2, 3]:
-            self._stop_profit_point = self.calc_price(
-                open_pos_price, True, self.profit_start_scale_1)
-        if self._profit_cond in [4]:
-            self._stop_profit_point = self.calc_price(
-                open_pos_price, True, self.profit_start_scale_2)
-        self.logger.info(f'{current_date}'
-                         f'<做多>开仓价:{open_pos_price}'
-                         f'止损设为:{self._stop_loss_price}'
-                         f'止盈起始价为:{self._stop_profit_point}')
-
-    def _set_stop_profit_values(self):
-        '''设置止盈操作的种类
-        止盈操作分为两种，每种对应不同的止盈策略
-        '''
-        super()._set_stop_profit_values()
-        if (self._daily_cond in [1, 2]):
-            self._profit_cond = 1
-        elif (self._daily_cond in [5]):
-            self._profit_cond = 2
-        elif (self._daily_cond in [3] and self._h2_cond == 6):
-            self._profit_cond = 3
-        elif (self._daily_cond in [3, 4] and self._h2_cond == 3):
-            self._profit_cond = 4
-
-    def _record_to_excel(self):
-        buy_str = '止损:{},止盈:{}'
-        self.tb_count = self._tb.r_l_open_pos(
-            self._symbol, self.get_current_date_str(),
-            self._daily_cond, self._h2_cond,
-            buy_str.format(self._stop_loss_price, self._stop_profit_point),
-            self._pos.open_price_long,
-            self._get_pos_number(),
-            self._account.commission,
-            self._account.balance
-        )
-
-    def reset(self):
-        super().reset()
-        self._h2_cond = 0
-        self._profit_cond = 0
-
-    def record_sell_to_excel(
-         self, t_time: str, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        self._tb.r_sold_pos(
-            self._symbol, self.tb_count, t_time, sold_reason, price, pos,
-            float_profit, self._account.commission,
-            self._account.balance, True)
-
-    def _get_pos_number(self) -> int:
-        '''返回当前合约持仓量
-        '''
-        return self._pos.pos_long
-
-    def get_float_profit(self) -> float:
-        return self._pos.float_profit_long
-
-    def _get_open_price(self) -> float:
-        return self._pos.open_price_long
-
-
-class Trade_Status_Virtual(Trade_Status_Long):
-    logger = LoggerGetter()
-
-    def _get_pos_number(self) -> int:
-        '''返回当前合约持仓量
-        '''
-        if hasattr(self, '_pos_quantity'):
-            return self._pos_quantity
-        else:
-            return 0
-
-    def get_float_profit(self) -> float:
-        return 0
-
-    def _get_open_price(self) -> float:
-        return self.get_current_price()
-
-    def _set_sale_prices(self, pos: int) -> None:
-        self._pos_quantity = pos
-        super()._set_sale_prices(pos)
-
-    def _record_to_excel(self):
-        buy_str = '止损:{},止盈:{}'
-        self.tb_count = self._tb.r_lv_open_pos(
-            self._symbol, self.get_current_date_str(),
-            self._daily_cond, self._h2_cond,
-            buy_str.format(self._stop_loss_price, self._stop_profit_point),
-            self._t_price,
-            self._get_pos_number(),
-            self._account.commission,
-            self._account.balance
-        )
-
-    def record_sell_to_excel(
-         self, t_time: str, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        sold_reason = str(sold_reason) + '虚拟售出'
-        self._tb.r_sold_pos(
-            self._symbol, self.tb_count, t_time, sold_reason, price, pos, 0,
-            self._account.commission, self._account.balance, True)
-
-    def create_tsl(self) -> Trade_Status_Long:
-        # logger = self.logger
-        # logger.debug(self.__dict__)
-        tsl = Trade_Status_Long(
-            self._account, self._pos, self._symbol,
-            self._quote, self._tb, self._rules)
-        tsl.is_trading = self.is_trading
-        tsl.tb_count = self.tb_count
-        if hasattr(self, "_has_improved_sl_price"):
-            tsl._has_improved_sl_price = self._has_improved_sl_price
-        if hasattr(self, "_begin_stop_profit"):
-            tsl._begin_stop_profit = self._begin_stop_profit
-        tsl._stop_loss_price = self._stop_loss_price
-        tsl._stop_profit_point = self._stop_profit_point
-        tsl._profit_stage = self._profit_stage
-        tsl._t_price = self._t_price
-        tsl._pos_quantity = self._pos_quantity
-        tsl._daily_cond = self._daily_cond
-        tsl._h2_cond = self._h2_cond
-        tsl._profit_cond = self._profit_cond
-        return tsl
+from trade.utils import Trade_Long_Utils, Trade_Short_Utils,\
+        Trade_Status_Virtual, Trade_Utils
+from dao.entity import TradeStatusInfo
+from dao.dao_service import update_tsi_for_next_trade
 
 
 class Future_Trade:
@@ -547,8 +17,8 @@ class Future_Trade:
     '''
     logger = LoggerGetter()
 
-    def __init__(self, api: TqApi, symbol: str, trade_config: dict,
-                 trade_book: Trade_Sheet):
+    def __init__(self, tsi: TradeStatusInfo, api: TqApi, symbol: str,
+                 trade_config: dict):
         self._api = api
         self._account = api.get_account()
         self._symbol = symbol
@@ -560,8 +30,8 @@ class Future_Trade:
         self._h2_klines = api.get_kline_serial(symbol, 60*60*3)
         self._m30_klines = api.get_kline_serial(symbol, 60*30)
         self._m5_klines = api.get_kline_serial(symbol, 60*5)
-        self._tb = trade_book
-        self._ts: Trade_Status
+        self._ts: Trade_Utils
+        self._tsi = tsi
         self._trade_config = trade_config
         self.calc_criteria(0)
 
@@ -607,7 +77,7 @@ class Future_Trade:
         '''final 方法，进行期货交易。开仓平仓，多空都适用。
         '''
         logger = self.logger
-        log_str = '{}交易,excel序号:{}价格:{}手数:{}'
+        log_str = '{}交易,价格:{}手数:{}'
         quote = self.get_quote()
         ts = self._ts
         target_pos = total_pos - sale_pos
@@ -621,10 +91,10 @@ class Future_Trade:
             if ts._get_pos_number() == target_pos:
                 if sale_pos == 0:
                     logger.debug(log_str.format(
-                        trade_time, ts.tb_count, price, total_pos))
+                        trade_time, price, total_pos))
                 else:
                     logger.debug(log_str.format(
-                        trade_time, ts.tb_count, price, sale_pos))
+                        trade_time, price, sale_pos))
                 break
         return target_pos
 
@@ -635,7 +105,7 @@ class Future_Trade:
 
     def _sell_and_record_pos(self, sale_pos: int, sale_reason: str) -> int:
         ts = self._ts
-        trade_time = ts.get_current_date_str()
+        trade_time = ts.get_current_date()
         price = ts.get_current_price()
         total_pos = ts._get_pos_number()
         float_profit = ts.get_float_profit()
@@ -679,7 +149,7 @@ class Future_Trade:
             log_str = '{}合约:{}<多空>开仓,开仓价:{},{}手'
             open_pos = self._calc_open_pos_number()
             self._trade_pos(open_pos, 0)
-            ts.set_deal_info(open_pos)
+            ts.set_trade_info(open_pos)
             trade_time = self._ts.get_current_date_str()
             open_pos = self._ts._get_pos_number()
             logger.info(log_str.format(
@@ -746,6 +216,10 @@ class Future_Trade:
         '''当某种K线生成新的记录时返回True
         k_type 代表K线类型
         0:代表当日交易结束的时刻
+        1:生成新日线
+        2:生成新3小时线
+        3:生成新30分钟线
+        4:生成新5分钟线
         '''
         if k_type == 1:
             return self._api.is_changing(
@@ -763,32 +237,36 @@ class Future_Trade:
             return self._api.is_changing(
                 self._daily_klines.iloc[-1], "close")
 
-    def buy_pos(self, tsl: Trade_Status_Long) -> None:
+    def buy_pos(self, tsl: Trade_Long_Utils) -> None:
         '''换月时，如果虚拟交易有持仓，则直接现价买入
         '''
 
-    def closeout_pos(self) -> None:
-        '''换月平仓
+    def finish(self) -> None:
+        '''换月操作，代表当前交易已完成。
+        如果当前合约交易有持仓，则全部平仓，
+        并将tsi状态设置成下一个合约的初始状态
         '''
         logger = self.logger
-        if self._ts.is_trading:
-            ts = self._ts
+        ts = self._ts
+        tsi = self._tsi
+        if tsi.is_trading:
             hold_pos = ts._get_pos_number()
-            logger = self.logger
             log_str = '换月清仓,售出数量{}'
             self._closeout('换月平仓')
             logger.info(log_str.format(hold_pos))
+        trade_time = self._ts.get_current_date()
+        update_tsi_for_next_trade(self._tsi, trade_time)
 
 
 class Future_Trade_Short(Future_Trade):
     '''做空交易类
     '''
-    def __init__(self, api: TqApi, symbol: str, trade_config: dict,
-                 trade_book: Trade_Sheet) -> None:
-        super().__init__(api, symbol, trade_config, trade_book)
+    def __init__(self, tsi: TradeStatusInfo, api: TqApi, symbol: str,
+                 trade_config: dict) -> None:
+        super().__init__(tsi, api, symbol, trade_config)
         rules = trade_config['short']
-        self._ts = Trade_Status_Short(
-            self._account, self._pos, symbol, self._quote, trade_book, rules)
+        self._ts = Trade_Short_Utils(
+            self._account, self._pos, symbol, self._quote, rules)
 
     def _not_match_dk_cond(self) -> bool:
         # logger = self.logger
@@ -879,7 +357,7 @@ class Future_Trade_Short(Future_Trade):
                 open_p, diffc_60, diff9_60, diff22_60, macd))
             self._h2_klines.loc[self._h2_klines.id == kline.id,
                                 's_qualified'] = 1
-            ts.set_last_h2_kline(kline)
+            ts.set_last_h3_kline(kline)
             return True
         return False
 
@@ -1029,12 +507,12 @@ class Future_Trade_Short(Future_Trade):
 class Future_Trade_Long(Future_Trade):
     '''做多交易类
     '''
-    def __init__(self, api: TqApi, symbol: str, trade_config: dict,
-                 trade_book: Trade_Sheet) -> None:
-        super().__init__(api, symbol, trade_config, trade_book)
+    def __init__(self, tsi: TradeStatusInfo, api: TqApi, symbol: str,
+                 trade_config: dict) -> None:
+        super().__init__(tsi, api, symbol, trade_config)
         rules = trade_config['long']
-        self._ts = Trade_Status_Long(self._account, self._pos, symbol,
-                                     self._quote, trade_book, rules)
+        self._ts = Trade_Long_Utils(self._account, self._pos, symbol,
+                                    self._quote, rules)
 
     def _match_dk_cond(self) -> bool:
         '''做多日线条件检测
@@ -1340,23 +818,22 @@ class Future_Trade_Long_Virtual(Future_Trade_Long):
     如果符合交易条件，则记录当时的止盈止损价格，并在之后跟踪调整止盈点位。
     当换月时，根据该对象的状态决定是否买入换月后的合约。
     '''
-    def __init__(self, api: TqApi, symbol: str, symbol_config: dict,
-                 trade_book: Trade_Sheet) -> None:
-        super().__init__(api, symbol, symbol_config, trade_book)
+    def __init__(self, tsi: TradeStatusInfo, api: TqApi, symbol: str,
+                 symbol_config: dict) -> None:
+        super().__init__(tsi, api, symbol, symbol_config)
         self._ts = Trade_Status_Virtual(
             self._account, self._pos, symbol,
-            self._quote, trade_book, self._ts._rules)
+            self._quote, self._ts._rules)
 
     def _sell_and_record_pos(self, sale_pos: int, sale_reason: str) -> int:
         logger = self.logger
         logger.debug('虚拟交易清仓')
         ts = self._ts
-        trade_time = ts.get_current_date_str()
+        trade_time = ts.get_current_date()
         price = ts.get_current_price()
         total_pos = ts._get_pos_number()
         rest_pos = total_pos - sale_pos
-        ts.record_sell_to_excel(trade_time, sale_reason, price, sale_pos,
-                                0)
+        ts.record_sell_to_excel(trade_time, sale_reason, price, sale_pos, 0)
         return rest_pos
 
     def _trade_pos(self, total_pos, sale_pos):
@@ -1367,304 +844,3 @@ class Future_Trade_Long_Virtual(Future_Trade_Long):
 
     def get_trade_status(self) -> Trade_Status_Virtual:
         return self._ts
-
-
-class Future_Trade_Util:
-    logger = LoggerGetter()
-
-    def __init__(self,  api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Sheet, trade_type=2) -> None:
-        ''' trade_type:代表要执行的策略类型
-        0: short，1: long，2: all
-        '''
-        self._api = api
-        symbol = symbol_config['symbol']
-        self._mains = symbol_config['main_list']
-        self._zl_quote = api.get_quote(symbol)
-        self._tb = trade_book
-        self._ftu_list: list(Future_Trade_Util) = []
-        if trade_type:
-            if trade_type == 1:
-                self._long_ftu = Long_Future_Trade_Util(
-                    self._zl_quote, api, symbol_config, trade_book)
-                self._ftu_list.append(self._long_ftu)
-            else:
-                self._long_ftu = Long_Future_Trade_Util(
-                    self._zl_quote, api, symbol_config, trade_book)
-                self._short_ftu = Short_Future_Trade_Util(
-                    self._zl_quote, api, symbol_config, trade_book)
-                self._ftu_list.append(self._long_ftu)
-                self._ftu_list.append(self._short_ftu)
-        else:
-            self._short_ftu = Short_Future_Trade_Util(
-                self._zl_quote, api, symbol_config, trade_book)
-            self._ftu_list.append(self._short_ftu)
-
-    def _is_time_to_switch_month(self, quote: Quote, ts: Trade_Status) -> bool:
-        trade_time = get_date_str(quote.datetime)
-        self.logger.debug(f'{trade_time} {ts._symbol} '
-                          f'距原合约截止日{quote.expire_rest_days}天')
-        if (ts._get_pos_number() > 0 and
-           quote.expire_rest_days <= self._switch_days[0]):
-            return True
-        elif (ts._get_pos_number() == 0
-              and quote.expire_rest_days <= self._switch_days[1]):
-            return True
-        return False
-
-    def _get_date_from_symbol(self, symbol_last_part):
-        temp = int(symbol_last_part)
-        year = int(temp / 100) + 2000
-        month = temp % 100
-        day = 1
-        return datetime(year, month, day, 0, 0, 0)
-
-    def try_trade(self) -> None:
-        for trade_util in self._ftu_list:
-            trade_util.try_trade()
-
-    def create_next_trade(self) -> None:
-        '''创建下一个合约的虚拟交易对象
-        当前只需要做多提供实现逻辑，做空提供空方法即可。
-        当天勤切换主力合约时，使用该方法为新的主力合约创建虚拟交易对象
-        用来跟踪该合约的交易情况，为换月时是否买入该合约提供依据
-        '''
-        for trade_util in self._ftu_list:
-            trade_util.create_next_trade()
-
-    def switch_trade(self):
-        '''在主连合约更换主力合约后调用，
-        如果满足换月条件，则进行换月操作。
-        '''
-        for ftu in self._ftu_list:
-            if ftu._need_switch_contract():
-                ftu.switch_trade()
-
-    def calc_indicators(self, k_type):
-        '''计算当前交易工具中所有交易的某个周期的技术指标
-        k_type 用来表示具体周期：
-        1:日线，2:2小时线，3:30分钟线，4:5分钟线
-        '''
-        for trade_util in self._ftu_list:
-            trade_util.calc_indicators(k_type)
-
-    def is_changing(self, k_type) -> bool:
-        '''判断交易工具类种的合约中某种K线是否发生变化
-        由于合约交易时间相同，只需判断一个合约即可
-        当该K线发生变化时，则调用相关方法进行进一步操作
-        k_type 用来表示具体周期：
-        1:日线，2:2小时线，3:30分钟线，4:5分钟线
-        '''
-        for ftu in self._ftu_list:
-            return ftu.is_changing(k_type)
-
-    def start_trading(self) -> None:
-        '''期货交易工具对外接口。交易时间内不断循环调用该接口
-        实现期货交易逻辑，包括：
-        * 尝试开仓
-        * 开仓后尝试止盈止损
-        * 天勤更换主力合约后，做多交易开始跟踪新主力交易状态
-        * 符合换月条件后，切换实际交易对象
-        '''
-        if self._api.is_changing(self._zl_quote, "underlying_symbol"):
-            self.create_next_trade()
-        # 当天交易结束时即17:59:59，会触发以下条件，
-        if self.is_changing(1):
-            self.close_operation()
-        if self.is_changing(2):
-            self.calc_indicators(2)
-        if self.is_changing(3):
-            self.calc_indicators(3)
-        if self.is_changing(4):
-            self.calc_indicators(4)
-        if self._api.is_changing(self._zl_quote, "datetime"):
-            t_time = tafunc.time_to_datetime(self._zl_quote.datetime)
-            # 为避免交易开始之前做出错误判断，需在交易时间进行交易
-            if t_time.hour > 8:
-                self.try_trade()
-
-    def close_operation(self):
-        logger = self.logger
-        log_str = '{} {}'
-        logger.debug(log_str.format(
-            get_date_str(self._zl_quote.datetime),
-            self._get_trading_symbol(),
-        ))
-        self.calc_indicators(1)
-        self.switch_trade()
-        # print(self._short_ftu._current_trade._pos)
-        # self.trading_close_operation()
-
-    def trading_close_operation(self) -> None:
-        for ftu in self._ftu_list:
-            ftu.trading_close_operation()
-
-    def get_next_symbol(self) -> str:
-        quote = self._long_ftu._current_trade._quote
-        symbol = self._long_ftu._current_trade._symbol
-        next_index = self._mains.index(quote.delivery_month) + 1
-        symbol_list = examine_symbol(symbol)
-        symbol_year = quote.delivery_year
-        if next_index >= len(self._mains):
-            next_index = 0
-        if next_index == 0:
-            symbol_year += 1
-        symbol_month = self._mains[next_index]
-        next_symbol = (f'{symbol_list[0]}.{symbol_list[1]}'
-                       f'{symbol_year}{symbol_month:02}')
-        self.logger.debug(f'next symbol is {next_symbol}')
-        return next_symbol
-
-    def _get_trading_symbol(self) -> str:
-        for ftu in self._ftu_list:
-            return ftu._current_trade._symbol
-
-
-class Short_Future_Trade_Util(Future_Trade_Util):
-    logger = LoggerGetter()
-
-    def __init__(self, zl_quote: Quote, api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Sheet) -> None:
-        self._api = api
-        self._tb = trade_book
-        self._zl_quote = zl_quote
-        self._config = symbol_config
-        symbol = self._zl_quote.underlying_symbol
-        self._switch_days = symbol_config['switch_days']
-        self._current_trade: Future_Trade_Short = Future_Trade_Short(
-            api, symbol, symbol_config, trade_book
-        )
-        self._future_trade_list: list(Future_Trade_Short) = []
-        self._future_trade_list.append(self._current_trade)
-
-    def create_next_trade(self) -> None:
-        ''' 创建下一个合约的虚拟交易，跟踪其行情
-        '''
-        logger = self.logger
-        symbol = self._zl_quote.underlying_symbol
-        trade_time = self._current_trade._ts.get_current_date_str()
-        logger.debug(f'{trade_time} 天勤主力合约已更换,'
-                     f'原合约 {self._current_trade._symbol},'
-                     f'新合约 {symbol},开始准备切换合约')
-        self._next_trade = True
-
-    def try_trade(self) -> None:
-        for trade in self._future_trade_list:
-            trade.try_trade()
-
-    def switch_trade(self):
-        logger = self.logger
-        old_symbol = self._current_trade._symbol
-        new_symbol = self._zl_quote.underlying_symbol
-        trade_time = self._current_trade._ts.get_current_date_str()
-        self._current_trade.closeout_pos()
-        self._current_trade = Future_Trade_Short(
-            self._api, new_symbol, self._config, self._tb
-        )
-        self._next_trade = None
-        self._future_trade_list.clear()
-        self._future_trade_list.append(self._current_trade)
-        logger.info(f'{trade_time} <做空>换月完成:原合约 {old_symbol},'
-                    f'新合约 {self._current_trade._symbol}')
-
-    def calc_indicators(self, k_type: int):
-        '''计算当前交易工具中所有交易的某个周期的技术指标
-        k_type 用来表示具体周期：
-        1:日线，2:2小时线，3:30分钟线，4:5分钟线
-        '''
-        for trade in self._future_trade_list:
-            trade.calc_criteria(k_type)
-
-    def is_changing(self, k_type) -> bool:
-        '''判断交易工具类种的合约中某种K线是否发生变化
-        由于合约交易时间相同，只需判断一个合约即可
-        当该K线发生变化时，则调用相关方法进行进一步操作
-        k_type 用来表示具体周期：
-        1:日线，2:2小时线，3:30分钟线，4:5分钟线
-        '''
-        return self._current_trade.is_changing(k_type)
-
-    def _need_switch_contract(self):
-        '''判断是否需要换月
-        规则是：如果原合约有持仓，则在合约交割月之前10天换月
-        否则，在交割月之前一个月月初换月。
-        '''
-        trade = self._current_trade
-        if hasattr(self, '_next_trade') and self._next_trade:
-            return self._is_time_to_switch_month(trade._quote, trade._ts)
-        return False
-
-    def trading_close_operation(self) -> None:
-        self._current_trade.trading_close_operation()
-
-
-class Long_Future_Trade_Util(Short_Future_Trade_Util):
-    logger = LoggerGetter()
-
-    def __init__(self, zl_quote: Quote, api: TqApi, symbol_config: dict,
-                 trade_book: Trade_Sheet) -> None:
-        super().__init__(zl_quote, api, symbol_config, trade_book)
-        symbol = self._zl_quote.underlying_symbol
-        self._current_trade: Future_Trade_Long = Future_Trade_Long(
-            api, symbol, symbol_config, trade_book
-        )
-        self._future_trade_list: list(Future_Trade_Long) = []
-        self._future_trade_list.append(self._current_trade)
-
-    def create_next_trade(self) -> None:
-        ''' 创建下一个合约的虚拟交易，跟踪其行情
-        '''
-        logger = self.logger
-        symbol = self._zl_quote.underlying_symbol
-        trade_time = self._current_trade._ts.get_current_date_str()
-        logger.debug(f'{trade_time} 平台主力合约已更换,'
-                     f'原合约 {self._current_trade._symbol},'
-                     f'新合约 {symbol},开始准备切换合约')
-        self._next_trade: Future_Trade_Long_Virtual =\
-            Future_Trade_Long_Virtual(self._api, symbol, self._config,
-                                      self._tb)
-        self._future_trade_list.append(self._next_trade)
-
-    def _need_switch_contract(self) -> bool:
-        '''判断是否需要换月
-        规则是：如果原合约有持仓，则在合约交割月之前10天换月
-        否则，在交割月之前一个月月初换月。
-        '''
-        logger = self.logger
-        trade = self._current_trade
-        if hasattr(self, '_next_trade') and self._next_trade:
-            c_symbol = trade._symbol
-            n_symbol = self._next_trade._symbol
-            last_symbol_list = examine_symbol(c_symbol)
-            today_symbol_list = examine_symbol(n_symbol)
-            if not last_symbol_list or not today_symbol_list:
-                logger.warning('新/旧合约代码有误，请检验')
-                return False
-            if today_symbol_list[0] != last_symbol_list[0] or \
-                    today_symbol_list[1] != last_symbol_list[1]:
-                logger.warning('新/旧合约品种不一，请检验')
-                return False
-            # if n_symbol <= c_symbol:
-            #     logger.warning('新合约非远月合约，不换月')
-            #     return False
-            return self._is_time_to_switch_month(trade._quote, trade._ts)
-        return False
-
-    def switch_trade(self):
-        logger = self.logger
-        old_symbol = self._current_trade._symbol
-        trade_time = self._current_trade._ts.get_current_date_str()
-        self._current_trade.closeout_pos()
-        self._current_trade = Future_Trade_Long(
-            self._api, self._next_trade._symbol, self._config, self._tb
-        )
-        self._current_trade.buy_pos(self._next_trade.get_trade_status())
-        self._next_trade = None
-        self._future_trade_list.clear()
-        self._future_trade_list.append(self._current_trade)
-
-        logger.info(f'{trade_time} 换月完成:旧合约 {old_symbol},'
-                    f'新合约 {self._current_trade._symbol}')
-
-    def trading_close_operation(self) -> None:
-        pass
