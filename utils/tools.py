@@ -19,7 +19,7 @@ def get_date_str(float_value):
     return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def get_date(float_value):
+def get_date_str_short(float_value):
     return tafunc.time_to_datetime(float_value).strftime("%Y-%m-%d")
 
 

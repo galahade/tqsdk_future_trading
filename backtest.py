@@ -21,8 +21,8 @@ def trade(trade_type, start_year, start_month, end_year):
                     backtest=TqBacktest(start_dt=start_time, end_dt=end_time),
                     auth=TqAuth("galahade", "211212"))
         client = MongoClient('mongodb://root:example@localhost:27017/')
-        # uid = str(uuid.uuid4())
-        uid = '9ab5e9c3-331a-44a8-b916-08b585d3ceaf'
+        uid = str(uuid.uuid4())
+        # uid = '9ab5e9c3-331a-44a8-b916-08b585d3ceaf'
         db = client.get_database(uid)
         wait_to_trade(api, trade_type, db)
 

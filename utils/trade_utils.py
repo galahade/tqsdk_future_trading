@@ -33,6 +33,7 @@ def wait_to_trade(api: TqApi, trade_type: int, db: database.Database) -> None:
         while True:
             api.wait_update()
             for ftu in ftu_list:
+                ftu.daily_check_task()
                 ftu.start_trading()
 
     except BacktestFinished:

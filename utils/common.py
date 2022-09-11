@@ -69,6 +69,6 @@ class TradeConfigGetter:
         self.dict_key = name
 
     def __get__(self, obj, objtype=None):
-        configs = getattr(obj, '_rules')
+        configs = getattr(obj, 'rules')
         value = configs.get(f'{self.dict_key}')
         return value

@@ -54,10 +54,9 @@ class Trade_Sheet:
         st.range((self.count, 2)).value = symbol
         if l_or_s:
             st.range((self.count, 3)).value = '多'
-            st.range((self.count, 4)).value = '卖'
         else:
             st.range((self.count, 3)).value = '空'
-            st.range((self.count, 4)).value = '买'
+        st.range((self.count, 4)).value = '平'
         st.range((self.count, 9)).value = t_time
         st.range((self.count, 10)).value = price
         st.range((self.count, 11)).value = sold_reason
@@ -110,7 +109,7 @@ def store_open_record(opi: OpenPosInfo) -> None:
     open_cond = ''
     ts = None
     if opi.l_or_s:
-        open_cond = '日线:{},2小时:{}'.format(opi.daily_cond, opi.h2_cond)
+        open_cond = '日线:{},2小时:{}'.format(opi.daily_cond, opi.h3_cond)
     else:
         open_cond = '日线:{}'.format(opi.daily_cond)
     if trade_book is not None:

@@ -1,6 +1,13 @@
-from datetime import datetime
 from utils.tools import get_custom_symbol
 # from bson.objectid import ObjectId
+
+
+class Trade_Data:
+    pass
+
+
+class Judge_Data:
+    pass
 
 
 class TradeStatusInfo:
@@ -12,6 +19,8 @@ class TradeStatusInfo:
         self.next_symbol = None
         self.is_trading = False
         self._id = None
+        self.trade_data = Trade_Data()
+        self.judge_data = Judge_Data()
         self._init_trade_data()
         self._init_judge_data()
 
@@ -28,6 +37,8 @@ class TradeStatusInfo:
         self.trade_data.has_islp = False
         # 该属性表示止损价格
         self.trade_data.slp = 0.0
+        # 该属性表示止损原因
+        self.trade_data.slr = '止损'
         # 该属性表示止盈监控开始价格
         self.trade_data.spp = 0.0
         # 该属性表示进入止盈阶段
@@ -44,19 +55,22 @@ class TradeStatusInfo:
         self.judge_data.h3_kline = None
         self.judge_data.m30_kline = None
 
-    def close_out(self, trade_time: datetime) -> None:
+    def close_out(self) -> None:
         self.is_trading = False
-        self.open_pos_id = None
-        self.profit_stage = 0
-        self.profit_cond = 0
-        self.daily_cond = 0
-        self.h2_cond = 0
-        self.last_modified = trade_time
+        self._init_judge_data()
+        self._init_trade_data()
 
-    def switch_symbol(self, trade_time: datetime) -> None:
-        self.close_out(trade_time)
+    def switch_symbol(self, trade_time) -> None:
+        self.last_modified = trade_time
+        self.close_out()
         self.current_symbol = self.next_symbol
         self.next_symbol = None
+
+    def is_closing_out(self, close_pos: int) -> bool:
+        if self.trade_data.pos <= close_pos:
+            return True
+        else:
+            return False
 
 
 class TradePosInfo:
@@ -67,14 +81,14 @@ class TradePosInfo:
         self.commission = commission
         self.current_balance = balance
         self.trade_date = tsi.last_modified
-        self.trade_price = tsi.trade_data.price
-        self.trade_number = tsi.trade_data.pos
 
 
 class OpenPosInfo(TradePosInfo):
     def __init__(self, tsi: TradeStatusInfo, l_or_s: bool, commission: float,
                  balance: float) -> None:
         super().__init__(tsi, l_or_s, commission, balance)
+        self.trade_price = tsi.trade_data.price
+        self.trade_number = tsi.trade_data.pos
         self.daily_cond = tsi.judge_data.d_cond
         self.h3_cond = tsi.judge_data.h3_cond
         self.stop_loss_price = tsi.trade_data.slp
@@ -87,9 +101,11 @@ class OpenPosInfo(TradePosInfo):
 
 class ClosePosInfo(TradePosInfo):
     def __init__(self, tsi: TradeStatusInfo, l_or_s: bool, commission: float,
-                 balance: float, float_profit: float,
-                 close_reason: str) -> None:
+                 balance: float, float_profit: float, close_price: float,
+                 close_pos: int, close_reason: str) -> None:
         super().__init__(tsi, l_or_s, commission, balance)
+        self.trade_price = close_price
+        self.trade_number = close_pos
         self.open_ops_id = tsi.trade_data.open_pos_id
         self.float_profit = float_profit
         self.close_reason = close_reason

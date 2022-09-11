@@ -1,4 +1,5 @@
-from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo
+from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo,\
+        Trade_Data, Judge_Data
 from pymongo.database import Database
 from utils.tools import get_custom_symbol
 from datetime import datetime
@@ -16,7 +17,7 @@ def store_open_record(opi: OpenPosInfo) -> None:
         'commission': opi.commission,
         'current_balance': opi.current_balance,
         'daily_cond': opi.daily_cond,
-        'h2_cond': opi.h2_cond,
+        'h3_cond': opi.h3_cond,
         'stop_loss_price': opi.stop_loss_price,
         'stop_profit_point': opi.stop_profit_point
     }
@@ -60,8 +61,8 @@ def _create_trade_status_info(
         'next_symbol': tsi.next_symbol,
         'is_trading': tsi.is_trading,
         'last_modified': tsi.last_modified,
-        'trade_data': None,
-        'judge_data': None
+        'trade_data': {},
+        'judge_data': {}
     }
     result = db.trade_status_infos.insert_one(trade_status_info)
     tsi._id = result.inserted_id
@@ -98,6 +99,7 @@ def update_tsi(tsi: TradeStatusInfo) -> None:
                   'trade_data.p_cond': tsi.trade_data.p_cond,
                   'trade_data.has_islp': tsi.trade_data.has_islp,
                   'trade_data.slp': tsi.trade_data.slp,
+                  'trade_data.slr': tsi.trade_data.slr,
                   'trade_data.spp': tsi.trade_data.spp,
                   'trade_data.bsp': tsi.trade_data.bsp,
                   'trade_data.stp': tsi.trade_data.stp,

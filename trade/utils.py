@@ -8,17 +8,17 @@ from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo
 from datetime import datetime
 
 
-class Trade_Utils:
+class TradeUtils:
     logger = LoggerGetter()
     buy_pos_scale = TradeConfigGetter()
 
     def __init__(self, account: Account, position: Position,
                  tsi: TradeStatusInfo, quote: Quote, rules: dict) -> None:
-        self._account = account
-        self._pos = position
-        self._quote = quote
+        self.account = account
+        self.position = position
+        self.quote = quote
         self.tsi = tsi
-        self._rules = rules
+        self.rules = rules
         self.p_l_ratio = self.base_scale
         self.sl_message = '止损'
         self.use_ps_ratio = False
@@ -35,7 +35,7 @@ class Trade_Utils:
     def set_last_m30_kline(self, kline):
         self.tsi.judge_data.m30_kline = kline
 
-    def set_trade_info(self, pos: int) -> None:
+    def set_open_info(self, pos: int) -> None:
         logger = self.logger
         if self.tsi.is_trading:
             logger.warning("无法更新tsi状态, 交易进行中。")
@@ -46,36 +46,37 @@ class Trade_Utils:
         self._store_open_pos_info()
 
     def get_stoplose_status(self) -> bool:
-        '''抽象方法，返回是否需要止损
+        '''返回是否需要止损
         '''
-        pass
+        td = self.tsi.trade_data
+        if self.tsi.is_trading:
+            if td.pos > 0 and self._is_get_slp():
+                return True
+        return False
 
-    def get_profit_status(self) -> bool:
-        '''抽象方法，返回是否需要止盈
-        '''
-        pass
+    def get_pos(self) -> int:
+        return self.tsi.trade_data.pos
 
     def reset(self):
         '''接口，需要进一步修改需要子类增加逻辑，重置内部变量状态
         '''
         self.p_l_ratio = self.base_scale
-        self.sl_message = '止损'
         self.use_ps_ratio = False
 
     def get_current_price(self) -> float:
         '''接口，返回当前交易价格
         '''
-        return self._quote.last_price
+        return self.quote.last_price
 
     def get_current_date_str(self) -> str:
         '''接口,返回当前交易时间
         '''
-        return get_date_str(self._quote.datetime)
+        return get_date_str(self.quote.datetime)
 
     def get_current_date(self) -> datetime:
         '''接口,返回当前交易时间
         '''
-        return tafunc.time_to_datetime(self._quote.datetime)
+        return tafunc.time_to_datetime(self.quote.datetime)
 
     def calc_price(self, price: float, is_add: bool, scale: float) -> float:
         '''类方法，按盈亏比计算目标价格
@@ -105,32 +106,33 @@ class Trade_Utils:
         opi = self._create_OpenPosInfo()
         store_open_record(opi)
         self.tsi.trade_data.open_pos_id = opi._id
-        update_tsi(self.tsi)
+        update_tsi(self.tsi, self.get_current_date())
 
     def _is_last_5_m(self) -> bool:
         '''判断交易时间是否为当日最后5分钟
         '''
-        t_time = tafunc.time_to_datetime(self._quote.datetime)
+        t_time = tafunc.time_to_datetime(self.quote.datetime)
         time_num = int(t_time.time().strftime("%H%M%S"))
         return 150000 > time_num > 145500
 
-    def record_sell_to_excel(
-         self, t_time: datetime, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        '''抽象方法，需要用新方法取代，增加存储到数据库的功能
-        在excel中插入卖出记录
-        '''
-        pass
+    def set_close_info(self, c_price: float, c_pos: int, c_reason: str,
+                       is_switch: bool):
+        tsi = self.tsi
+        self._store_close_pos_info(c_reason, c_price, c_pos)
+        t_time = self.get_current_date()
+        if is_switch:
+            tsi.switch_symbol(t_time)
+        elif tsi.is_closing_out(c_pos):
+            tsi.close_out()
+        else:
+            tsi.trade_data.pos = tsi.trade_data.pos - c_pos
+        update_tsi(tsi, t_time)
 
-    def _get_pos_number(self) -> int:
-        '''抽象方法,返回当前合约持仓量
-        '''
-        pass
-
-    def get_float_profit(self) -> float:
-        '''抽象方法,返回当前浮动盈亏
-        '''
-        pass
+    def _store_close_pos_info(self, sold_reason: str, sold_price: float,
+                              sold_pos: int) -> None:
+        self.tsi.last_modified = self.get_current_date()
+        cpi = self._create_ClosePosInfo(sold_price, sold_pos, sold_reason)
+        store_close_record(cpi)
 
     def get_Kline_values(self, kline) -> tuple:
         ema9 = kline.ema9
@@ -142,8 +144,11 @@ class Trade_Utils:
         trade_time = self.get_current_date_str()
         return (ema9, ema22, ema60, macd, close, open_p, trade_time)
 
+    def update_tsi(self) -> None:
+        update_tsi(self.tsi, self.get_current_date())
 
-class Trade_Short_Utils(Trade_Utils):
+
+class TradeUtilsShort(TradeUtils):
     logger = LoggerGetter()
     base_scale = TradeConfigGetter()
     profit_start_scale = TradeConfigGetter()
@@ -152,37 +157,33 @@ class Trade_Short_Utils(Trade_Utils):
     stop_loss_scale = TradeConfigGetter()
     adjusted_base_scale = TradeConfigGetter()
 
-    def get_stoplose_status(self) -> bool:
+    def _is_get_slp(self) -> bool:
+        price = self.get_current_price()
         td = self.tsi.trade_data
-        if self.tsi.is_trading:
-            if td.pos > 0 and td.price >= td.slp:
-                return True
-        return False
+        return price >= td.slp
 
     def try_improve_sl_price(self) -> None:
         '''尝试提高止损价
         当盈亏比达到1:10后将止损价格提升至1:5
         '''
+        td = self.tsi.trade_data
         logger = self.logger
         price = self.get_current_price()
         trade_time = self.get_current_date_str()
         log_str = '{}<做空>现价{}达到1:{}盈亏比,将止损价提高至{}'
-        o_price = self._pos.open_price_short
         calc_price = self.calc_price
-        promote_price = calc_price(o_price, False, self.promote_scale)
-        if (hasattr(self, "_has_improved_sl_price")
-           and self._has_improved_sl_price):
+        promote_price = calc_price(td.price, False, self.promote_scale)
+        if td.has_islp:
             return
         else:
-            if (self.tsi.trade_data.p_stage == 0 and price <= promote_price):
-                self._stop_loss_price = calc_price(o_price, False,
-                                                   self.promote_target)
-                self.tsi.trade_data.p_stage = 1
+            if (td.p_stage == 0 and price <= promote_price):
+                td.slp = calc_price(td.price, False, self.promote_target)
+                td.p_stage = 1
+                td.slr = '跟踪止盈'
+                td.has_islp = True
+                update_tsi(self.tsi, self.get_current_date())
                 logger.debug(log_str.format(
-                    trade_time, price, self.promote_scale,
-                    self._stop_loss_price))
-                self.sl_message = '跟踪止盈'
-                self._has_improved_sl_price = True
+                    trade_time, price, self.promote_scale, td.slp))
 
     def get_profit_status(self, dk) -> bool:
         '''返回是否满足止盈条件。当第一次符合止盈条件时，设置相关止盈参数
@@ -197,6 +198,7 @@ class Trade_Short_Utils(Trade_Utils):
             elif td.stp:
                 if close < e9:
                     td.stp = False
+                    update_tsi(self.tsi, self.get_current_date())
         return False
 
     def is_final5_closeout(self, dk):
@@ -232,17 +234,14 @@ class Trade_Short_Utils(Trade_Utils):
                          f'止盈起始价为:{td.spp}')
 
     def _create_OpenPosInfo(self) -> OpenPosInfo:
-        return OpenPosInfo(self.tsi, False, self._account.commission,
-                           self._account.balance,)
+        return OpenPosInfo(self.tsi, False, self.account.commission,
+                           self.account.balance)
 
-    def record_sell_to_excel(
-         self, t_time: datetime, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        cpi = ClosePosInfo(self.tsi.current_symbol, False,
-                           self._account.commission,
-                           self._account.balance, t_time, price, pos,
-                           float_profit, sold_reason)
-        store_close_record(cpi)
+    def _create_ClosePosInfo(self, sold_price: float, sold_pos: int,
+                             sold_reason: str) -> ClosePosInfo:
+        return ClosePosInfo(self.tsi, False, self.account.commission,
+                            self.account.balance, self.get_float_profit(),
+                            sold_price, sold_pos, sold_reason)
 
     def reset(self):
         super().reset()
@@ -250,13 +249,13 @@ class Trade_Short_Utils(Trade_Utils):
     def _get_pos_number(self) -> int:
         '''返回当前合约持仓量
         '''
-        return self._pos.pos_short
+        return self.position.pos_short
 
     def get_float_profit(self) -> float:
-        return self._pos.float_profit_short
+        return self.position.float_profit_short
 
     def _get_open_price(self) -> float:
-        return self._pos.open_price_short
+        return self.position.open_price_short
 
     def is_2days_later(self, kline):
         log_str = '{}<做空>距离交易时间{}达到{}'
@@ -277,7 +276,7 @@ class Trade_Short_Utils(Trade_Utils):
         return False
 
 
-class Trade_Long_Utils(Trade_Utils):
+class TradeUtilsLong(TradeUtils):
     logger = LoggerGetter()
     base_scale = TradeConfigGetter()
     profit_start_scale_1 = TradeConfigGetter()
@@ -288,42 +287,38 @@ class Trade_Long_Utils(Trade_Utils):
     promote_target_2 = TradeConfigGetter()
     stop_loss_scale = TradeConfigGetter()
 
-    def set_last_h2_kline(self, cond_num, *args):
+    def set_last_h3_kline(self, cond_num, *args):
         '''重写父类方法。
         设置符合条件的两小时线，同时记录符合哪个两小时条件。
         '''
         super().set_last_h3_kline(*args)
         self.tsi.judge_data.h3_cond = cond_num
 
-    def get_stoplose_status(self) -> bool:
+    def _is_get_slp(self) -> bool:
+        price = self.get_current_price()
         td = self.tsi.trade_data
-        if self.tsi.is_trading:
-            if td.pos > 0 and td.price <= td.slp:
-                return True
-        return False
+        return price <= td.slp
 
     def try_improve_sl_price(self) -> bool:
+        td = self.tsi.trade_data
         logger = self.logger
         price = self.get_current_price()
         trade_time = self.get_current_date_str()
         log_str = '{}<做多>止盈条件{}现价{}达到1:{}盈亏比,将止损价提高至{}'
-        o_price = self.trade_data.price
         calc_price = self.calc_price
-        if (hasattr(self, "_has_improved_sl_price") and
-           self._has_improved_sl_price):
+        if td.has_islp:
             return
         else:
-            if self.tsi.trade_data.p_cond in [1, 2, 3]:
-                standard_price = calc_price(o_price, True,
+            if td.p_cond in [1, 2, 3]:
+                standard_price = calc_price(td.price, True,
                                             self.promote_scale_1)
                 if price >= standard_price:
-                    self._stop_loss_price = calc_price(o_price, True,
-                                                       self.promote_target_1)
+                    td.slp = calc_price(td.price, True, self.promote_target_1)
+                    td.slr = '跟踪止盈'
+                    td.has_islp = True
+                    update_tsi(self.tsi, self.get_current_date())
                     logger.debug(log_str.format(
-                        trade_time, 1, price, self.promote_scale_1,
-                        self._stop_loss_price))
-                    self.sl_message = '跟踪止盈'
-                    self._has_improved_sl_price = True
+                        trade_time, 1, price, self.promote_scale_1, td.slp))
 
     def get_profit_status(self) -> int:
         '''返回满足止盈条件的序号，并设置相关止盈参数
@@ -338,16 +333,18 @@ class Trade_Long_Utils(Trade_Utils):
         if self.tsi.is_trading:
             log_str = ('{}<做多>现价:{} 达到止盈价{}开始监控,'
                        '止损价提高到:{}')
+            price = self.get_current_price()
             if td.bsp:
                 return td.p_cond
-            if td.price >= td.spp:
+            if price >= td.spp:
                 td.bsp = True
                 if td.p_cond == 4:
                     td.slp = td.price
                     td.p_stage = 1
+                update_tsi(self.tsi, self.get_current_date())
                 logger.info(log_str.format(
                     self.get_current_date_str(),
-                    td.price, td.spp, td.slp
+                    price, td.spp, td.slp
                 ))
                 return td.p_cond
         return 0
@@ -427,35 +424,32 @@ class Trade_Long_Utils(Trade_Utils):
             td.p_cond = 4
 
     def _create_OpenPosInfo(self) -> OpenPosInfo:
-        return OpenPosInfo(self.tsi, True, self._account.commission,
-                           self._account.balance,)
+        return OpenPosInfo(self.tsi, True, self.account.commission,
+                           self.account.balance,)
 
-    def reset(self):
-        super().reset()
-        self.tsi.judge_data.h3_cond = 0
-
-    def record_sell_to_excel(
-         self, t_time: datetime, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        cpi = ClosePosInfo(self.tsi.current_symbol, True,
-                           self._account.commission,
-                           self._account.balance, t_time, price, pos,
-                           float_profit, sold_reason)
-        store_close_record(cpi)
+    def _create_ClosePosInfo(self, sold_price: float, sold_pos: int,
+                             sold_reason: str) -> ClosePosInfo:
+        print(self.position)
+        return ClosePosInfo(self.tsi, True, self.account.commission,
+                            self.account.balance, self.get_float_profit(),
+                            sold_price, sold_pos, sold_reason)
 
     def _get_pos_number(self) -> int:
         '''返回当前合约持仓量
         '''
-        return self._pos.pos_long
+        return self.position.pos_long
 
     def get_float_profit(self) -> float:
-        return self._pos.float_profit_long
+        return self.position.float_profit_long
 
     def _get_open_price(self) -> float:
-        return self._pos.open_price_long
+        return self.position.open_price_long
+
+    def reset(self):
+        super().reset()
 
 
-class Trade_Status_Virtual(Trade_Long_Utils):
+class Trade_Status_Virtual(TradeUtilsLong):
     logger = LoggerGetter()
 
     def _get_pos_number(self) -> int:
@@ -476,32 +470,5 @@ class Trade_Status_Virtual(Trade_Long_Utils):
         self._pos_quantity = pos
         super()._set_sale_prices(pos)
 
-    def record_sell_to_excel(
-         self, t_time: str, sold_reason: str,
-         price: float, pos: int, float_profit: float) -> None:
-        sold_reason = str(sold_reason) + '虚拟售出'
-        cpi = ClosePosInfo(self.tsi.current_symbol, True, 0,
-                           self._account.balance, t_time, price, pos,
-                           0, sold_reason)
-        store_close_record(cpi)
-
-    def create_tsl(self) -> Trade_Long_Utils:
-        # logger = self.logger
-        # logger.debug(self.__dict__)
-        tsl = Trade_Long_Utils(
-            self._account, self._pos, self.tsi.current_symbol,
-            self._quote, self._tb, self._rules)
-        tsl.is_trading = self.tsi.is_trading
-        if hasattr(self, "_has_improved_sl_price"):
-            tsl._has_improved_sl_price = self._has_improved_sl_price
-        if hasattr(self, "_begin_stop_profit"):
-            tsl._begin_stop_profit = self._begin_stop_profit
-        tsl._stop_loss_price = self._stop_loss_price
-        tsl._stop_profit_point = self._stop_profit_point
-        tsl._profit_stage = self.tsi.trade_data.p_stage
-        tsl._t_price = self.trade_data.price
-        tsl._pos_quantity = self._pos_quantity
-        tsl._daily_cond = self.tsi.judge_data.d_cond
-        tsl._h2_cond = self.tsi.judge_data.h3_cond
-        tsl._profit_cond = self.tsi.trade_data.p_cond
-        return tsl
+    def create_tsl(self) -> TradeUtilsLong:
+        pass

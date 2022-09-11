@@ -26,11 +26,6 @@ def update_tsi_next_symbol(tsi: TradeStatusInfo, next_symbol: str) -> None:
     mdao.update_tsi(tsi)
 
 
-def update_tsi_for_next_trade(tsi: TradeStatusInfo,
-                              trade_time: datetime) -> None:
-    tsi.switch_symbol(trade_time)
-    mdao.update_tsi(tsi)
-
-
-def update_tsi(tsi: TradeStatusInfo) -> None:
+def update_tsi(tsi: TradeStatusInfo, t_time: datetime) -> None:
+    tsi.last_modified = t_time
     mdao.update_tsi(tsi)
