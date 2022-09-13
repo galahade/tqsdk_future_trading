@@ -7,7 +7,6 @@ from datetime import datetime
 
 def get_custom_symbol(zl_symbol: str, l_or_s: bool) -> str:
     symbol_list = examine_symbol(zl_symbol)
-    print(symbol_list)
     result = symbol_list[1] + symbol_list[2]
     result += 'long' if l_or_s else 'short'
     return result
@@ -139,9 +138,3 @@ def is_decline_2p(kline, l_kline) -> bool:
 
 def get_logger():
     return logging.getLogger(__name__)
-
-
-if __name__ == '__main__':
-    tb = Trade_Book('KQ.m@DCE.p')
-    print(tb.__dict__)
-    tb.finish()

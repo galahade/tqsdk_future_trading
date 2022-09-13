@@ -2,6 +2,7 @@ from utils import common
 import sys
 import logging
 import backtest
+import start_trading
 
 now = common.now
 is_back_test = False
@@ -22,6 +23,7 @@ def main():
             backtest.trade(trade_type, start_year, start_month, end_year)
         else:
             logger.debug("开始进行正式交易")
+            start_trading.trade(trade_type)
     except Exception as e:
         logger.exception(e)
         return str(e)

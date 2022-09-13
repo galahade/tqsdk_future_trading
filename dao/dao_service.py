@@ -1,16 +1,13 @@
 from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo
-import dao.excel_dao as edao
 import dao.mongo_dao as mdao
 from datetime import datetime
 
 
 def store_open_record(opi: OpenPosInfo) -> None:
-    edao.store_open_record(opi)
     mdao.store_open_record(opi)
 
 
 def store_close_record(cpi: ClosePosInfo) -> None:
-    edao.store_close_record(cpi)
     mdao.store_close_record(cpi)
 
 

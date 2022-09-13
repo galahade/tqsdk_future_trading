@@ -1,7 +1,5 @@
 import logging
-from tqsdk import TqApi, BacktestFinished
-from dao.excel_dao import Trade_Book
-import dao.excel_dao as excel_dao
+from tqsdk import TqApi
 import dao.mongo_dao as mongo_dao
 from trade.broker import Future_Trade_Broker
 import yaml
@@ -19,28 +17,18 @@ def wait_to_trade(api: TqApi, trade_type: int, db: database.Database) -> None:
     trade_config = get_trade_config()
     ftu_list = []
     symbols_config = trade_config['rules']
-    tb = Trade_Book()
-    excel_dao.trade_book = tb
     mongo_dao.db = db
     for symbol_config in symbols_config:
         if symbol_config['is_active']:
-            tb.create_sheet(symbol_config['symbol'])
             ftu = Future_Trade_Broker(api, symbol_config, trade_type)
             ftu_list.append(ftu)
     logger.debug("准备开始交易，调用天勤接口，等待交易时机")
 
-    try:
-        while True:
-            api.wait_update()
-            for ftu in ftu_list:
-                ftu.daily_check_task()
-                ftu.start_trading()
-
-    except BacktestFinished:
-        try:
-            tb.finish()
-        finally:
-            raise BacktestFinished(api)
+    while True:
+        api.wait_update()
+        for ftu in ftu_list:
+            ftu.daily_check_task()
+            ftu.start_trading()
 
 
 def get_trade_config() -> dict:

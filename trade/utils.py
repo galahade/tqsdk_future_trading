@@ -429,7 +429,6 @@ class TradeUtilsLong(TradeUtils):
 
     def _create_ClosePosInfo(self, sold_price: float, sold_pos: int,
                              sold_reason: str) -> ClosePosInfo:
-        print(self.position)
         return ClosePosInfo(self.tsi, True, self.account.commission,
                             self.account.balance, self.get_float_profit(),
                             sold_price, sold_pos, sold_reason)

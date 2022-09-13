@@ -1,5 +1,4 @@
-from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo,\
-        Trade_Data, Judge_Data
+from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo
 from pymongo.database import Database
 from utils.tools import get_custom_symbol
 from datetime import datetime
@@ -80,7 +79,6 @@ def _get_trade_status_info(zl_symbol: str, l_or_s: bool) -> TradeStatusInfo:
         tsi.next_symbol = trade_status_info.get('next_symbol')
         tsi.is_trading = trade_status_info.get('is_trading')
         tsi.open_pos_id = trade_status_info.get('open_pos_id')
-        print(f'mongo tsi is {tsi}')
         return tsi
     return None
 

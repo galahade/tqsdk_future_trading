@@ -6,11 +6,12 @@ name = "pypi"
 [packages]
 tqsdk = "*"
 pyyaml = "*"
-pytest = "*"
-xlwings = "*"
 pymongo = "*"
+pytz = "*"
 
 [dev-packages]
+pytest = "*"
+xlwings = "*"
 
 [requires]
 python_version = "3.9"

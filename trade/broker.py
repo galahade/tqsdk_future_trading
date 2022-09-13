@@ -20,6 +20,7 @@ class Future_Trade_Broker:
         self._zl_symbol = symbol
         self._mains = symbol_config['main_list']
         self._zl_quote = api.get_quote(symbol)
+        self.checked = False
         self._ftu_list: list(Future_Trade_Broker) = []
         if trade_type:
             if trade_type == 1:
@@ -98,7 +99,6 @@ class Future_Trade_Broker:
             self._get_trading_symbol(),
         ))
         self._calc_indicators(1)
-        # print(self._short_ftu._current_trade._pos)
         # self.trading_close_operation()
 
     def _trading_close_operation(self) -> None:
@@ -126,12 +126,22 @@ class Future_Trade_Broker:
         for ftu in self._ftu_list:
             return ftu._trade._utils.tsi.current_symbol
 
+    # def daily_check_task(self) -> None:
+    #     logger = self.logger
+    #     if self._api.is_changing(
+    #        self._short_ftu._trade._daily_klines.iloc[-1], "open_oi"):
+    #         log_str = '{}-{}'
+    #         logger.debug(log_str.format(
+    #             get_date_str(self._zl_quote.datetime),
+    #             self._get_trading_symbol(),
+    #         ))
+    #         self._check_record_nsymbol()
+    #         self._check_switch_trade()
+
     def daily_check_task(self) -> None:
         logger = self.logger
-        # ts = self._api.get_trading_status(self._zl_symbol)
-        # if ts.trade_status == "AUCTIONORDERING":
-        if self._api.is_changing(
-           self._short_ftu._trade._daily_klines.iloc[-1], "open_oi"):
+        ts = self._api.get_trading_status(self._zl_symbol)
+        if ts.trade_status == "AUCTIONORDERING" and not self.checked:
             log_str = '{}-{}'
             logger.debug(log_str.format(
                 get_date_str(self._zl_quote.datetime),
@@ -139,6 +149,7 @@ class Future_Trade_Broker:
             ))
             self._check_record_nsymbol()
             self._check_switch_trade()
+            self.checked = True
 
     def _check_record_nsymbol(self) -> None:
         '''当天勤主力合约切换后，在交易状态信息中记录下一个主力合约。
