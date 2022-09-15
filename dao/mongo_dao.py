@@ -41,12 +41,12 @@ def store_close_record(cpi: ClosePosInfo) -> None:
     cpi._id = result.inserted_id
 
 
-def init_trade_status_info(zl_symbol: str, current_symbol: str, l_or_s: bool,
+def init_trade_status_info(zl_symbol: str, zl_quote, l_or_s: bool,
                            trade_time: datetime) -> TradeStatusInfo:
     tsi = _get_trade_status_info(zl_symbol, l_or_s)
     if tsi is None:
-        tsi = _create_trade_status_info(zl_symbol, current_symbol,
-                                        l_or_s, trade_time)
+        tsi = _create_trade_status_info(
+            zl_symbol, zl_quote.underlying_symbol, l_or_s, trade_time)
     return tsi
 
 

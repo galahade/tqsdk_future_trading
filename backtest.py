@@ -1,4 +1,4 @@
-from tqsdk import TqApi, TqAuth, TqBacktest, TqSim, BacktestFinished
+from tqsdk2 import TqApi, TqAuth, TqBacktest, TqSim, BacktestFinished
 from datetime import date
 from utils.trade_utils import wait_to_trade
 import logging

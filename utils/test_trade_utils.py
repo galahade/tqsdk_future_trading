@@ -1,6 +1,6 @@
 from datetime import datetime
 from tools import examine_symbol
-from tqsdk import tafunc
+from tqsdk2 import tafunc
 
 
 def __get_date_from_symbol(symbol_last_part):

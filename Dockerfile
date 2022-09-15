@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.9-buster
+FROM python:3.10-bullseye
 
 WORKDIR /app
 
@@ -9,6 +9,6 @@ RUN pip3 install -r requirements.txt
 ENV TZ Asia/Shanghai
 
 COPY . .
-CMD [ "python3", "main.py", "-t", "-s", "2018", "-tt", "1"]
+CMD [ "python3", "main.py"]
 
 

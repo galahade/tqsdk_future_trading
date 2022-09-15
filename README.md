@@ -42,3 +42,17 @@ docker run --rm -ti galahade/future-trade-docker /bin/bash
 docker-compose up -d
 docker-compose down
 ```
+
+### 融航系统信息
+
+```
+account:wxlg018
+password:345678
+BrokerID:RohonReal
+app_id:MQT_MQT_1.0
+auto_code:mVuQfsHT3qbTBEYV
+交易地址：139.196.40.170:11001
+电信行情地址：180.168.212.232:41214
+联通行情地址：27.115.78.184:41214
+随心易多账户平台编码：100170
+```

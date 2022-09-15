@@ -1,7 +1,7 @@
 import re
 import logging
-from tqsdk.ta import EMA, MACD
-from tqsdk import tafunc
+from tqsdk2.ta import EMA, MACD
+from tqsdk2 import tafunc
 from datetime import datetime
 
 

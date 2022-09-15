@@ -11,9 +11,9 @@ def store_close_record(cpi: ClosePosInfo) -> None:
     mdao.store_close_record(cpi)
 
 
-def init_trade_status_info(zl_symbol: str, current_symbol: str, l_or_s: bool,
+def init_trade_status_info(zl_symbol: str, zl_quote, l_or_s: bool,
                            trade_time: datetime) -> TradeStatusInfo:
-    tsi = mdao.init_trade_status_info(zl_symbol, current_symbol,
+    tsi = mdao.init_trade_status_info(zl_symbol, zl_quote,
                                       l_or_s, trade_time)
     return tsi
 

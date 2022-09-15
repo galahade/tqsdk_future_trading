@@ -1,5 +1,5 @@
 import logging
-from tqsdk import TqApi
+from tqsdk2 import TqApi
 import dao.mongo_dao as mongo_dao
 from trade.broker import Future_Trade_Broker
 import yaml

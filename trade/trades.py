@@ -1,5 +1,5 @@
 from math import floor
-from tqsdk import TqApi, TargetPosTask, tafunc
+from tqsdk2 import TqApi, TargetPosTask, tafunc
 from utils.tools import get_date_str, get_date_str_short, diff_two_value,\
     calc_indicator, is_nline
 from utils.common import LoggerGetter
@@ -29,6 +29,8 @@ class FutureTrade:
         self._utils: TradeUtils = self._create_utils(
             account, position, tsi, quote, trade_config)
         self.calc_criteria(0)
+        log_str = '合约:{}-pos:{}'
+        self.logger.debug(log_str.format(symbol, position))
 
     def _calc_open_pos_number(self) -> bool:
         utils = self._utils

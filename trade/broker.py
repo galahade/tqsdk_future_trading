@@ -1,8 +1,7 @@
 from utils.tools import get_date_str, examine_symbol
 from utils.common import LoggerGetter
 from datetime import datetime
-from tqsdk.objs import Quote
-from tqsdk import TqApi, tafunc
+from tqsdk2 import TqApi, tafunc
 from trade.trades import FutureTrade, FutureTradeLong,\
         FutureTradeShort
 from dao.dao_service import init_trade_status_info, update_tsi_next_symbol
@@ -20,7 +19,6 @@ class Future_Trade_Broker:
         self._zl_symbol = symbol
         self._mains = symbol_config['main_list']
         self._zl_quote = api.get_quote(symbol)
-        self.checked = False
         self._ftu_list: list(Future_Trade_Broker) = []
         if trade_type:
             if trade_type == 1:
@@ -139,51 +137,27 @@ class Future_Trade_Broker:
     #         self._check_switch_trade()
 
     def daily_check_task(self) -> None:
-        logger = self.logger
-        ts = self._api.get_trading_status(self._zl_symbol)
-        if ts.trade_status == "AUCTIONORDERING" and not self.checked:
-            log_str = '{}-{}'
-            logger.debug(log_str.format(
-                get_date_str(self._zl_quote.datetime),
-                self._get_trading_symbol(),
-            ))
-            self._check_record_nsymbol()
-            self._check_switch_trade()
-            self.checked = True
-
-    def _check_record_nsymbol(self) -> None:
-        '''当天勤主力合约切换后，在交易状态信息中记录下一个主力合约。
-        当满足换月条件后使用该合约作为下一个主力合约。
-        '''
-        for trade_util in self._ftu_list:
-            trade_util.check_record_nsymbol()
-
-    def _check_switch_trade(self) -> None:
-        '''在主连合约更换主力合约后调用，
-        如果满足换月条件，则进行换月操作。
-        '''
         for ftu in self._ftu_list:
-            if ftu._need_switch_contract():
-                ftu.switch_trade()
+            ftu.daily_check_task()
 
 
 class Short_Future_Trade_Broker:
     logger = LoggerGetter()
 
-    def __init__(self, zl_symbol: str, zl_quote: Quote, api: TqApi,
+    def __init__(self, zl_symbol: str, zl_quote, api: TqApi,
                  symbol_config: dict) -> None:
         self._api = api
         self._zl_symbol = zl_symbol
         self._zl_quote = zl_quote
         self._config = symbol_config
         self._switch_days = symbol_config['switch_days']
-        symbol = self._zl_quote.underlying_symbol
-        trade_time = tafunc.time_to_datetime(zl_quote.datetime)
-        self._trade = self._init_trade(symbol, trade_time)
+        self._trade = self._init_trade()
+        self.checked = False
 
-    def _init_trade(self, symbol, trade_time) -> FutureTrade:
-        tsi = init_trade_status_info(self._zl_symbol,
-                                     symbol, False, trade_time)
+    def _init_trade(self) -> FutureTrade:
+        trade_time = tafunc.time_to_datetime(self._zl_quote.datetime)
+        tsi = init_trade_status_info(
+            self._zl_symbol, self._zl_quote, False, trade_time)
         return FutureTradeShort(tsi, self._api, self._config)
 
     def _create_trade(self, symbol, trade_time) -> FutureTrade:
@@ -282,17 +256,37 @@ class Short_Future_Trade_Broker:
                          f'原合约 {c_symbol},'
                          f'新合约 {symbol},开始准备切换合约')
 
+    def daily_check_task(self) -> None:
+        logger = self.logger
+        symbol = self._get_symbol()
+        ts = self._api.get_trading_status(symbol)
+        if ((ts.trade_status == "AUCTIONORDERING" or
+             ts.trade_status == "CONTINOUS") and not self.checked):
+            log_str = '{}-{}'
+            logger.debug(log_str.format(
+                get_date_str(self._zl_quote.datetime),
+                self._get_symbol(),
+            ))
+            self.check_record_nsymbol()
+            if self._need_switch_contract():
+                self.switch_trade()
+            self.checked = True
+
+    def _get_symbol(self) -> str:
+        return self._trade._utils.tsi.current_symbol
+
 
 class Long_Future_Trade_Broker(Short_Future_Trade_Broker):
     logger = LoggerGetter()
 
-    def __init__(self, zl_symbol: str, zl_quote: Quote, api: TqApi,
+    def __init__(self, zl_symbol: str, zl_quote, api: TqApi,
                  symbol_config: dict,) -> None:
         super().__init__(zl_symbol, zl_quote, api, symbol_config)
 
-    def _init_trade(self, symbol, trade_time) -> FutureTrade:
-        tsi = init_trade_status_info(self._zl_symbol,
-                                     symbol, True, trade_time)
+    def _init_trade(self) -> FutureTrade:
+        trade_time = tafunc.time_to_datetime(self._zl_quote.datetime)
+        tsi = init_trade_status_info(
+            self._zl_symbol, self._zl_quote, True, trade_time)
         return FutureTradeLong(tsi, self._api, self._config)
 
     def _create_trade(self, symbol, trade_time) -> FutureTrade:

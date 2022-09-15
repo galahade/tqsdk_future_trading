@@ -1,11 +1,12 @@
 version: "3.8"
+name:
+  future_trading
 services:
   app:
-    build: .
-    command: python3 main.py
+    image: galahade/future-trade-docker:v1.1
     working_dir: /app
     networks:
-      - future-trade-dev
+      - future_trading
     environment:
       MONGO_HOST: mongo
       MONGO_ADMINUSERNAME: root
@@ -16,17 +17,17 @@ services:
     image: mongo
     restart: always
     ports:
-      - 27018:27017
+      - 27017:27017
     volumes:
-      - trade-mongo-data-dev:/data/db
+      - trade-mongo-data:/data/db
     networks:
-      - future-trade-dev
+      - future_trading
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
 
 volumes:
-  trade-mongo-data-dev:
+  trade-mongo-data:
 
 networks:
-  future-trade-dev:
+  future_trading:

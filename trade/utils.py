@@ -1,10 +1,9 @@
-from tqsdk.objs import Quote, Position, Account
-from tqsdk import tafunc
+from tqsdk2 import tafunc
 from utils.tools import get_date_str
 from utils.common import LoggerGetter, TradeConfigGetter
 from dao.dao_service import store_open_record, store_close_record,\
         update_tsi
-from dao.entity import OpenPosInfo, ClosePosInfo, TradeStatusInfo
+from dao.entity import OpenPosInfo, ClosePosInfo
 from datetime import datetime
 
 
@@ -12,8 +11,7 @@ class TradeUtils:
     logger = LoggerGetter()
     buy_pos_scale = TradeConfigGetter()
 
-    def __init__(self, account: Account, position: Position,
-                 tsi: TradeStatusInfo, quote: Quote, rules: dict) -> None:
+    def __init__(self, account, position, tsi, quote, rules: dict) -> None:
         self.account = account
         self.position = position
         self.quote = quote
