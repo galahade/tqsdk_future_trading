@@ -1,16 +1,37 @@
 version: "3.8"
 services:
-  app_test:
-    image: galahade/future-trade-docker
-    command: python3 main.py -t -s 2018 -tt 0
+  app:
+    image: galahade/future-trade-test-docker:v1.0
     working_dir: /app
+    depends_on:
+      - mongo
     environment:
-      MONGO_HOST: mongo
-      MONGO_ADMINUSERNAME: root
-      MONGO_ADMINPASSWORD: example
-      MONGO_PORT: 27017
+      MONGO_CONF_FILE: /run/secrets/mongo_conf_file
+      TQ_CONF_FILE: /run/secrets/tq_conf_file
+      ROHON_CONF_FILE: /run/secrets/rohon_conf_file
+    secrets:
+      - mongo_conf_file
+      - tq_conf_file
+      - rohon_conf_file
 
-networks:
-  default:
-    name: tqsdk_future_trading_future_trading
-    external: true
+  mongo:
+    image: mongo
+    restart: always
+    ports:
+      - 27019:27017
+    volumes:
+      - trade-mongo-test-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+volumes:
+  trade-mongo-test-data:
+
+secrets:
+  mongo_conf_file:
+    file: secrets/mongo_config.yaml
+  tq_conf_file:
+    file: secrets/tq_config.yaml
+  rohon_conf_file:
+    file: secrets/rohon_config.yaml

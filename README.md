@@ -35,24 +35,29 @@ docker build --no-cache --tag galahade/future-trade-docker .
 docker run -e TZ=Asia/Shanghai --rm -ti galahade/future-trade-docker /bin/bash
 docker run --rm -ti galahade/future-trade-docker /bin/bash
 
+docker tag galahade/future-trade-docker galahade/future-trade-docker:v1.2
+```
+### Build test image
+
+```
+docker build --tag galahade/future-trade-test-docker .
+docker tag galahade/future-trade-test-docker galahade/future-trade-test-docker:v1.0
 ```
 
 ### Docker Compose Command
+
 ```
 docker-compose up -d
 docker-compose down
 ```
 
-### 融航系统信息
+### Docker swarm Command
 
 ```
-account:wxlg018
-password:345678
-BrokerID:RohonReal
-app_id:MQT_MQT_1.0
-auto_code:mVuQfsHT3qbTBEYV
-交易地址：139.196.40.170:11001
-电信行情地址：180.168.212.232:41214
-联通行情地址：27.115.78.184:41214
-随心易多账户平台编码：100170
+docker stack deploy -c docker-compose.yml future-trade-dev
+docker stack deploy -c docker-compose-test.yml future-trade-test
+docker stack deploy -c docker-compose-deploy.yml future-trade
+
+docker rm future-trade-dev
+docker rm future-trade-test
 ```

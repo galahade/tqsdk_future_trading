@@ -268,29 +268,31 @@ class FutureTradeShort(FutureTrade):
         e9, e22, e60, macd, close, open_p, trade_time =\
             self.get_Kline_values(kline)
         daily_k_time = get_date_str_short(kline.datetime)
-        log_str = ('{}<做空>{}日线条件:{} K线时间:{},ema9:{},ema22:{},'
-                   'ema60:{},收盘:{},MACD:{}')
-        if kline['s_qualified']:
+        log_str = ('{} {} <做空> {} 日线{} K线时间:{} ema9:{} ema22:{} '
+                   'ema60:{} 收盘:{} MACD:{}')
+        is_match = False
+        if kline.get('s_qualified', default=-1) != -1:
             return kline['s_qualified']
-        elif kline.get('s_match', default=1) == 0:
-            return False
-        elif kline.id > 58:
+        else:
             # 日线条件1
             if e22 > e60 and macd < 0 and e22 > close:
                 # logger.debug(f'kline column:{kline}')
                 is_match = not self._not_match_dk_cond()
                 if is_match:
-                    logger.debug(log_str.format(
-                        trade_time, symbol, 1, daily_k_time,
-                        e9, e22, e60, close, macd))
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
                                            's_qualified'] = 1
                     utils.set_last_daily_kline(1, kline)
                 else:
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
-                                           's_match'] = 0
-                return is_match
-        return False
+                                           's_qualified'] = 0
+            else:
+                self._daily_klines.loc[self._daily_klines.id == kline.id,
+                                       's_qualified'] = 0
+            match_str = '满足' if is_match else '不满足'
+            logger.info(log_str.format(
+                trade_time, symbol, match_str, '', daily_k_time,
+                e9, e22, e60, close, macd))
+        return is_match
 
     def _match_3hk_cond(self) -> bool:
         '''做空3小时线检测
@@ -304,22 +306,28 @@ class FutureTradeShort(FutureTrade):
         diff9_60 = diff_two_value(e9, e60)
         diff22_60 = diff_two_value(e22, e60)
         kline_time = get_date_str(kline.datetime)
-        log_str = ('{} {} 满足<做空>3小时条件:K线生成时间:{},'
-                   'ema9:{},ema22:{},ema60:{},收盘:{},开盘{}'
-                   'diffc_60:{},diff9_60:{},diff22_60{},MACD:{}')
-        if kline["s_qualified"]:
-            return True
-        if (e22 > e60 and
-            (e22 > e9 or (e22 < e9 and close < e60 and open_p > e60))
-           and diff9_60 < 3 and diff22_60 < 3 and diffc_60 < 3 and macd < 0):
-            logger.debug(log_str.format(
-                trade_time, utils.tsi.current_symbol, kline_time, e9, e22,
-                e60, close, open_p, diffc_60, diff9_60, diff22_60, macd))
+        log_str = ('{} {} <做空> {} 3小时条件 K线生成时间:{} '
+                   'ema9:{} ema22:{} ema60:{} 收盘:{} 开盘{}'
+                   'diffc_60:{} diff9_60:{} diff22_60{} MACD:{}')
+        is_match = False
+        if kline.get('s_qualified', default=-1) != -1:
+            return kline['s_qualified']
+        elif (e22 > e60 and
+              (e22 > e9 or (e22 < e9 and close < e60 and open_p > e60)) and
+              diff9_60 < 3 and diff22_60 < 3 and diffc_60 < 3 and macd < 0):
             self._h3_klines.loc[self._h3_klines.id == kline.id,
                                 's_qualified'] = 1
             utils.set_last_h3_kline(kline)
-            return True
-        return False
+            is_match = True
+        else:
+            self._h3_klines.loc[self._h3_klines.id == kline.id,
+                                's_qualified'] = 0
+        match_str = '满足' if is_match else '不满足'
+        logger.info(log_str.format(
+            trade_time, utils.tsi.current_symbol, match_str,
+            kline_time, e9, e22,
+            e60, close, open_p, diffc_60, diff9_60, diff22_60, macd))
+        return is_match
 
     def _match_30mk_cond(self) -> bool:
         '''做空30分钟线检测
@@ -487,13 +495,22 @@ class FutureTradeLong(FutureTrade):
         s = utils.tsi.current_symbol
         e9, e22, e60, macd, close, open_p, trade_time =\
             self.get_Kline_values(kline)
-        daily_k_time = get_date_str_short(kline.datetime)
-        log_str = ('{} {} <做多>日线{}:K线时间:{},ema9:{},ema22:{},'
-                   'ema60:{},收盘:{},diff9_60:{},diffc_60:{},diff22_60:{},'
+        try:
+            daily_k_time = get_date_str_short(kline.datetime)
+        except Exception as e:
+            logger.exception(e)
+            logger.error(kline)
+            logger.error(self._daily_klines)
+            return False
+
+        log_str = ('{} {} <做多> {} 日线{} K线时间:{} ema9:{} ema22:{} '
+                   'ema60:{} 收盘:{} diff9_60:{} diffc_60:{} diff22_60:{} '
                    'MACD:{}')
-        if kline['l_qualified']:
+        is_match = False
+        cond_number = 0
+        if kline.get('l_qualified', default=-1) != -1:
             return kline['l_qualified']
-        elif kline.id > 58:
+        else:
             diff9_60 = diff_two_value(e9, e60)
             diffc_60 = diff_two_value(close, e60)
             diff22_60 = diff_two_value(e22, e60)
@@ -501,57 +518,54 @@ class FutureTradeLong(FutureTrade):
                 # 日线条件1
                 if ((diff9_60 < 1 or diff22_60 < 1) and close > e60 and
                    macd > 0 and (e9 > e22 or macd > 0)):
-                    logger.debug(log_str.format(
-                        trade_time, s, 1, daily_k_time, e9, e22, e60, close,
-                        diff9_60, diffc_60, diff22_60, macd))
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
                                            'l_qualified'] = 1
                     utils.set_last_daily_kline(1, kline)
-                    return True
+                    cond_number = 1
+                    is_match = True
             elif e22 > e60:
                 # 日线条件2
                 if diff22_60 < 1 and close > e60:
-                    logger.debug(log_str.format(
-                        trade_time, s, 2, daily_k_time, e9, e22, e60, close,
-                        diff9_60, diffc_60, diff22_60, macd))
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
                                            'l_qualified'] = 2
                     utils.set_last_daily_kline(2, kline)
-                    return True
+                    cond_number = 2
+                    is_match = True
                 # 日线条件3
                 elif (1 < diff9_60 < 3 and e9 > e22 and
                       e22 > min(open_p, close) > e60):
-                    logger.debug(log_str.format(
-                        trade_time, s, 3, daily_k_time, e9, e22, e60, close,
-                        diff9_60, diffc_60, diff22_60, macd))
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
                                            'l_qualified'] = 3
                     utils.set_last_daily_kline(3, kline)
-                    return True
+                    cond_number = 3
+                    is_match = True
                 # 日线条件4
                 elif (1 < diff22_60 < 3 and diff9_60 < 2 and e22 > close > e60
                       and e22 > e9 > e60):
-                    logger.debug(log_str.format(
-                        trade_time, s, 4, daily_k_time, e9, e22, e60, close,
-                        diff9_60, diffc_60, diff22_60, macd))
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
                                            'l_qualified'] = 4
                     utils.set_last_daily_kline(4, kline)
-                    return True
+                    cond_number = 4
+                    is_match = True
                 # 日线条件5
                 elif (diff22_60 > 3 and diffc_60 < 3 and
                       e22 > close > e60 and e22 > open_p > e60):
-                    logger.debug(log_str.format(
-                        trade_time, s, 5, daily_k_time, e9, e22, e60, close,
-                        diff9_60, diffc_60, diff22_60, macd))
                     self._daily_klines.loc[self._daily_klines.id == kline.id,
                                            'l_qualified'] = 5
                     utils.set_last_daily_kline(5, kline)
-                    return True
-        return False
+                    cond_number = 5
+                    is_match = True
+            if not cond_number:
+                self._daily_klines.loc[self._daily_klines.id == kline.id,
+                                       'l_qualified'] = 0
+        match_str = '满足' if is_match else '不满足'
+        logger.info(log_str.format(
+            trade_time, s, match_str, cond_number, daily_k_time,
+            e9, e22, e60, close, diff9_60, diffc_60, diff22_60, macd))
+        return is_match
 
     def _match_3hk_cond(self) -> bool:
-        '''做多2小时线检测
+        '''做多3小时线检测
         '''
         logger = self.logger
         utils = self._utils
@@ -565,68 +579,65 @@ class FutureTradeLong(FutureTrade):
         diff22_60 = diff_two_value(e22, e60)
         diff9_60 = diff_two_value(e9, e60)
         kline_time = get_date_str(kline.datetime)
-        log_str = ('{} {} <做多>2小时{}: K线时间:{},'
-                   'ema9:{},ema22:{},ema60:{},收盘:{},开盘:{},'
-                   'diffc_60:{},diffo_60:{},diff22_60{},MACD:{}')
-        if kline["l_qualified"]:
-            return True
+        log_str = ('{} {} <做多> {} 2小时{}: K线时间:{} '
+                   'ema9:{} ema22:{} ema60:{} 收盘:{} 开盘:{},'
+                   'diffc_60:{} diffo_60:{} diff22_60{} MACD:{}')
+        is_match = False
+        cond_number = 0
+        if kline.get('l_qualified', default=-1) != -1:
+            return kline['l_qualified']
         if diffc_60 < 3 or diffo_60 < 3:
             if jd.d_cond in [1, 2]:
                 if (e22 < e60 and e9 < e60 and
                     (diff22_60 < 1 or
                      (1 < diff22_60 < 2 and (macd > 0 or close > e60)))):
-                    logger.debug(log_str.format(
-                        trade_time, s, 1, kline_time, e9, e22, e60, close,
-                        open_p, diffc_60, diffo_60, diff22_60, macd))
                     self._h3_klines.loc[self._h3_klines.id == kline.id,
                                         'l_qualified'] = 1
                     utils.set_last_h3_kline(1, kline)
-                    return True
+                    cond_number = 1
+                    is_match = True
                 elif close > e9 > e22 > e60:
                     if self._match_3hk_c2_distance():
-                        logger.debug(log_str.format(
-                            trade_time, s, 2, kline_time, e9, e22, e60, close,
-                            open_p, diffc_60, diffo_60, diff22_60, macd))
                         self._h3_klines.loc[self._h3_klines.id == kline.id,
                                             'l_qualified'] = 2
                         utils.set_last_h3_kline(2, kline)
-                        return True
+                        cond_number = 2
+                        is_match = True
                     if diff9_60 < 1 and diff22_60 < 1 and macd > 0:
-                        logger.debug(log_str.format(
-                            trade_time, s, 5, kline_time, e9, e22, e60, close,
-                            open_p, diffc_60, diffo_60, diff22_60, macd))
                         self._h3_klines.loc[self._h3_klines.id == kline.id,
                                             'l_qualified'] = 5
                         utils.set_last_h3_kline(5, kline)
-                        return True
+                        cond_number = 5
+                        is_match = True
             elif jd.d_cond in [3, 4]:
                 if (close > e60 > e22 and macd > 0 and diff22_60 < 1 and e9 <
                    e60):
-                    logger.debug(log_str.format(
-                        trade_time, s, 3, kline_time, e9, e22, e60, close,
-                        open_p, diffc_60, diffo_60, diff22_60, macd))
                     self._h3_klines.loc[self._h3_klines.id == kline.id,
                                         'l_qualified'] = 3
                     utils.set_last_h3_kline(3, kline)
-                    return True
+                    cond_number = 3
+                    is_match = True
                 elif jd.d_cond == 3 and diff9_60 < 1 and diff22_60 < 1:
-                    logger.debug(log_str.format(
-                        trade_time, s, 6, kline_time, e9, e22, e60, close,
-                        open_p, diffc_60, diffo_60, diff22_60, macd))
                     self._h3_klines.loc[self._h3_klines.id == kline.id,
                                         'l_qualified'] = 6
                     utils.set_last_h3_kline(6, kline)
-                    return True
+                    cond_number = 6
+                    is_match = True
             elif jd.d_cond == 5:
                 if (e60 > e22 > e9):
-                    logger.debug(log_str.format(
-                        trade_time, s, 4, kline_time, e9, e22, e60, close,
-                        open_p, diffc_60, diffo_60, diff22_60, macd))
                     self._h3_klines.loc[self._h3_klines.id == kline.id,
                                         'l_qualified'] = 4
                     utils.set_last_h3_kline(4, kline)
-                    return True
-        return False
+                    cond_number = 4
+                    is_match = True
+        else:
+            self._h3_klines.loc[self._h3_klines.id == kline.id,
+                                'l_qualified'] = 0
+        match_str = '满足' if is_match else '不满足'
+        logger.info(log_str.format(
+            trade_time, s, match_str, cond_number, kline_time, e9, e22, e60,
+            close, open_p, diffc_60, diffo_60, diff22_60, macd))
+        return is_match
 
     def _match_3hk_c2_distance(self) -> bool:
         # logger = self.logger
@@ -675,19 +686,24 @@ class FutureTradeLong(FutureTrade):
             self.get_Kline_values(kline)
         diffc_60 = diff_two_value(close, e60)
         kline_time = get_date_str(kline.datetime)
-        log_str = ('{} {} <做多>30分钟条件:K线时间:{},'
-                   'ema9:{},ema22:{},ema60:{},收盘:{},diffc_60:{},MACD:{}')
-        if kline["l_qualified"]:
-            return True
-        if close > e60 and macd > 0 and diffc_60 < 1.2:
-            logger.debug(log_str.format(
-                trade_time, s, kline_time, e9, e22, e60,
-                close, diffc_60, macd))
+        log_str = ('{} {} <做多> {} 30分钟条件 K线时间:{} ema9:{} ema22:{} '
+                   'ema60:{} 收盘:{} diffc_60:{} MACD:{}')
+        is_match = False
+        if kline.get('l_qualified', default=-1) != -1:
+            return kline['l_qualified']
+        elif close > e60 and macd > 0 and diffc_60 < 1.2:
             self._m30_klines.loc[self._m30_klines.id == kline.id,
                                  'l_qualified'] = 1
             utils.set_last_m30_kline(kline)
-            return True
-        return False
+            is_match = True
+        else:
+            self._m30_klines.loc[self._m30_klines.id == kline.id,
+                                 'l_qualified'] = 0
+        match_str = '满足' if is_match else '不满足'
+        logger.debug(log_str.format(
+            trade_time, s, match_str, kline_time, e9, e22, e60,
+            close, diffc_60, macd))
+        return is_match
 
     def _match_5mk_cond(self) -> bool:
         '''做多5分钟线检测

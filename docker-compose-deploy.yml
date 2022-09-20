@@ -1,19 +1,20 @@
 version: "3.8"
-name:
-  future_trading
 services:
   app:
-    image: galahade/future-trade-docker:v1.1
+    image: galahade/future-trade-docker:v1.2
     working_dir: /app
     networks:
       - future_trading
     depends_on:
       - mongo
     environment:
-      MONGO_HOST: mongo
-      MONGO_ADMINUSERNAME: root
-      MONGO_ADMINPASSWORD: example
-      MONGO_PORT: 27017
+      MONGO_CONF_FILE: /run/secrets/mongo_conf_file
+      TQ_CONF_FILE: /run/secrets/tq_conf_file
+      ROHON_CONF_FILE: /run/secrets/rohon_conf_file
+    secrets:
+      - mongo_conf_file
+      - tq_conf_file
+      - rohon_conf_file
 
   mongo:
     image: mongo
@@ -33,3 +34,11 @@ volumes:
 
 networks:
   future_trading:
+
+secrets:
+  mongo_conf_file:
+    file: secrets/mongo_config.yaml
+  tq_conf_file:
+    file: secrets/tq_config.yaml
+  rohon_conf_file:
+    file: secrets/rohon_config.yaml

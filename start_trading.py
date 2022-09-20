@@ -1,22 +1,33 @@
 from tqsdk2 import TqApi, TqAuth, TqSim, TqRohon
 from utils.trade_utils import wait_to_trade
+from utils.tools import get_yaml_config
 from pymongo import MongoClient
 import os
 from datetime import datetime
 import time
 import logging
 
-mongo_host = os.environ['MONGO_HOST']
-mongo_user = os.environ['MONGO_ADMINUSERNAME']
-mongo_pasw = os.environ['MONGO_ADMINPASSWORD']
-mongo_port = os.environ['MONGO_PORT']
+mongo_conf_file = os.environ['MONGO_CONF_FILE']
+rohon_conf_file = os.environ['ROHON_CONF_FILE']
+tq_conf_file = os.environ['TQ_CONF_FILE']
+
+mongo_conf = get_yaml_config(mongo_conf_file)
+rohon_conf = get_yaml_config(rohon_conf_file)
+tq_conf = get_yaml_config(tq_conf_file)
+
+mongo_host = mongo_conf['mongo']['host']
+mongo_user = mongo_conf['mongo']['user']
+mongo_pasw = mongo_conf['mongo']['password']
+mongo_port = mongo_conf['mongo']['port']
+tq_user = tq_conf['tq']['user']
+tq_pass = tq_conf['tq']['password']
 
 
 def trade(trade_type: int):
     logger = logging.getLogger(__name__)
     mongo_url = (f'mongodb://{mongo_user}:{mongo_pasw}'
                  f'@{mongo_host}:{mongo_port}/')
-    api = TqApi(get_test_acc(), auth=TqAuth("galahade", "211212"))
+    api = TqApi(get_rohon_acc(), auth=TqAuth(tq_user, tq_pass))
     logger.info(f'账户信息:{api.get_account()}')
     client = MongoClient(mongo_url)
     db = client.get_database('future_trade')
@@ -24,12 +35,12 @@ def trade(trade_type: int):
 
 
 def get_rohon_acc():
-    td_url = "tcp://139.196.40.170:11001"
-    broker_id = "RohonReal"
-    app_id = "MQT_MQT_1.0"
-    auth_code = "mVuQfsHT3qbTBEYV"
-    user_name = "wxlg018"
-    password = "345678"
+    td_url = rohon_conf['rohon']['url']
+    broker_id = rohon_conf['rohon']['broker_id']
+    app_id = rohon_conf['rohon']['app_id']
+    auth_code = rohon_conf['rohon']['auth_code']
+    user_name = rohon_conf['rohon']['user_name']
+    password = rohon_conf['rohon']['password']
     return TqRohon(td_url, broker_id, app_id, auth_code, user_name, password)
 
 

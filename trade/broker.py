@@ -66,7 +66,7 @@ class Future_Trade_Broker:
         for ftu in self._ftu_list:
             return ftu.is_changing(k_type)
 
-    def start_trading(self) -> None:
+    def _daily_trade(self) -> None:
         '''期货交易工具对外接口。交易时间内不断循环调用该接口
         实现期货交易逻辑，包括：
         * 尝试开仓
@@ -75,8 +75,8 @@ class Future_Trade_Broker:
         * 符合换月条件后，切换实际交易对象
         '''
         # 当天交易结束时即17:59:59，会触发以下条件，
-        if self._is_changing(1):
-            self._close_operation()
+        # if self._is_changing(1):
+            # self._close_operation()
         if self._is_changing(2):
             self._calc_indicators(2)
         if self._is_changing(3):
@@ -84,14 +84,11 @@ class Future_Trade_Broker:
         if self._is_changing(4):
             self._calc_indicators(4)
         if self._api.is_changing(self._zl_quote, "datetime"):
-            t_time = tafunc.time_to_datetime(self._zl_quote.datetime)
-            # 为避免交易开始之前做出错误判断，需在交易时间进行交易
-            if t_time.hour > 8:
-                self._try_trade()
+            self._try_trade()
 
     def _close_operation(self):
         logger = self.logger
-        log_str = '{} {}'
+        log_str = '{} {} 交易结束'
         logger.debug(log_str.format(
             get_date_str(self._zl_quote.datetime),
             self._get_trading_symbol(),
@@ -136,9 +133,13 @@ class Future_Trade_Broker:
     #         self._check_record_nsymbol()
     #         self._check_switch_trade()
 
-    def daily_check_task(self) -> None:
+    def _daily_check_task(self) -> None:
         for ftu in self._ftu_list:
             ftu.daily_check_task()
+
+    def daily_opration(self) -> None:
+        self._daily_check_task()
+        self._daily_trade()
 
 
 class Short_Future_Trade_Broker:
@@ -152,7 +153,8 @@ class Short_Future_Trade_Broker:
         self._config = symbol_config
         self._switch_days = symbol_config['switch_days']
         self._trade = self._init_trade()
-        self.checked = False
+        self._daily_checked = False
+        self._trade_checked = False
 
     def _init_trade(self) -> FutureTrade:
         trade_time = tafunc.time_to_datetime(self._zl_quote.datetime)
@@ -178,7 +180,19 @@ class Short_Future_Trade_Broker:
         self._next_trade = True
 
     def try_trade(self) -> None:
-        self._trade.try_trade()
+        logger = self.logger
+        log_str = '{} {} {} 交易开始'
+        symbol = self._get_symbol()
+        ts = self._api.get_trading_status(symbol)
+        if not self._trade_checked and ts.trade_status == "CONTINOUS":
+            self._trade_checked = True
+            logger.info(log_str.format(
+                get_date_str(self._zl_quote.datetime),
+                self._get_symbol(),
+                self._trade._utils.tsi.custom_symbol
+            ))
+        if ts.trade_status == "CONTINOUS":
+            self._trade.try_trade()
 
     def switch_trade(self):
         logger = self.logger
@@ -261,16 +275,17 @@ class Short_Future_Trade_Broker:
         symbol = self._get_symbol()
         ts = self._api.get_trading_status(symbol)
         if ((ts.trade_status == "AUCTIONORDERING" or
-             ts.trade_status == "CONTINOUS") and not self.checked):
-            log_str = '{}-{}'
-            logger.debug(log_str.format(
-                get_date_str(self._zl_quote.datetime),
-                self._get_symbol(),
-            ))
+             ts.trade_status == "CONTINOUS") and not self._daily_checked):
+            log_str = '{} {} {} 交易日检查任务结束'
             self.check_record_nsymbol()
             if self._need_switch_contract():
                 self.switch_trade()
-            self.checked = True
+            self._daily_checked = True
+            logger.debug(log_str.format(
+                get_date_str(self._zl_quote.datetime),
+                self._get_symbol(),
+                self._trade._utils.tsi.custom_symbol
+            ))
 
     def _get_symbol(self) -> str:
         return self._trade._utils.tsi.current_symbol

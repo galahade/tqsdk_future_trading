@@ -3,6 +3,7 @@ import logging
 from tqsdk2.ta import EMA, MACD
 from tqsdk2 import tafunc
 from datetime import datetime
+import yaml
 
 
 def get_custom_symbol(zl_symbol: str, l_or_s: bool) -> str:
@@ -92,9 +93,6 @@ def calc_indicator(klines):
     calc_ema60(klines)
     calc_ema9(klines)
 
-    klines["l_qualified"] = 0
-    klines["s_qualified"] = 0
-
     klines["ema22.board"] = "MAIN"
     klines["ema22.color"] = "red"
     klines["ema60.board"] = "MAIN"
@@ -138,3 +136,9 @@ def is_decline_2p(kline, l_kline) -> bool:
 
 def get_logger():
     return logging.getLogger(__name__)
+
+
+def get_yaml_config(path: str) -> dict:
+    with open(path, 'r') as f:
+        yaml_config = yaml.safe_load(f.read())
+        return yaml_config
