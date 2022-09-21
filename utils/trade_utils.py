@@ -23,6 +23,8 @@ def wait_to_trade(api: TqApi, trade_type: int, db: database.Database) -> None:
             ftu = Future_Trade_Broker(api, symbol_config, trade_type)
             ftu_list.append(ftu)
     logger.debug("准备开始交易，调用天勤接口，等待交易时机")
+    api.wait_update()
+    logger.debug("天勤服务器端已更新，开始交易日工作")
 
     while True:
         # logger.debug("before wait update")

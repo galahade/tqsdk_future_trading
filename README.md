@@ -58,6 +58,6 @@ docker stack deploy -c docker-compose.yml future-trade-dev
 docker stack deploy -c docker-compose-test.yml future-trade-test
 docker stack deploy -c docker-compose-deploy.yml future-trade
 
-docker rm future-trade-dev
-docker rm future-trade-test
+docker stack rm future-trade-dev
+docker stack rm future-trade-test
 ```

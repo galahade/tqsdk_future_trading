@@ -27,7 +27,7 @@ def trade(trade_type: int):
     logger = logging.getLogger(__name__)
     mongo_url = (f'mongodb://{mongo_user}:{mongo_pasw}'
                  f'@{mongo_host}:{mongo_port}/')
-    api = TqApi(get_rohon_acc(), auth=TqAuth(tq_user, tq_pass))
+    api = TqApi(get_test_acc(), auth=TqAuth(tq_user, tq_pass))
     logger.info(f'账户信息:{api.get_account()}')
     client = MongoClient(mongo_url)
     db = client.get_database('future_trade')

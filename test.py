@@ -6,6 +6,6 @@ klines = api.get_kline_serial("DCE.p2301", 60*60*24)
 zl_quote = api.get_quote("KQ.m@DCE.i")
 while True:
     api.wait_update
-    if api.is_changing(klines, "datetime"):
+    if api.is_changing(zl_quote, "datetime"):
         print(f'trade status is: {ts.trade_status}')
         print(f'trade time is: {klines.iloc[-1].datetime}')

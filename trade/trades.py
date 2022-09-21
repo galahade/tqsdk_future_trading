@@ -22,7 +22,7 @@ class FutureTrade:
         quote = self._api.get_quote(symbol)
         position = api.get_position(symbol)
         self._trade_tool = TargetPosTask(api, symbol)
-        self._daily_klines = api.get_kline_serial(symbol, 60*60*24)
+        self._daily_klines = api.get_kline_serial(symbol, 60*60*24).copy()
         self._h3_klines = api.get_kline_serial(symbol, 60*60*3)
         self._m30_klines = api.get_kline_serial(symbol, 60*30)
         self._m5_klines = api.get_kline_serial(symbol, 60*5)
