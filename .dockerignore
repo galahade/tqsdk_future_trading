@@ -1,5 +1,7 @@
 .git/
 secrets/
+*.tmp
+*.temp
 tags
 Pipfile*
 .DS_Store

@@ -10,6 +10,7 @@ import logging
 mongo_conf_file = os.environ['MONGO_CONF_FILE']
 rohon_conf_file = os.environ['ROHON_CONF_FILE']
 tq_conf_file = os.environ['TQ_CONF_FILE']
+runtime_env = int(os.environ['RUNTIME_ENV'])
 
 mongo_conf = get_yaml_config(mongo_conf_file)
 rohon_conf = get_yaml_config(rohon_conf_file)
@@ -27,7 +28,11 @@ def trade(trade_type: int):
     logger = logging.getLogger(__name__)
     mongo_url = (f'mongodb://{mongo_user}:{mongo_pasw}'
                  f'@{mongo_host}:{mongo_port}/')
-    api = TqApi(get_test_acc(), auth=TqAuth(tq_user, tq_pass))
+    print(f'runtime:{runtime_env == 0}')
+    if runtime_env == 0:
+        api = TqApi(get_test_acc(), auth=TqAuth(tq_user, tq_pass))
+    else:
+        api = TqApi(get_rohon_acc(), auth=TqAuth(tq_user, tq_pass))
     logger.info(f'账户信息:{api.get_account()}')
     client = MongoClient(mongo_url)
     db = client.get_database('future_trade')

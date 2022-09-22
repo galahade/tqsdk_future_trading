@@ -1,4 +1,5 @@
 secrets/
+conf/
 tags
 # excel file
 *.xlsx

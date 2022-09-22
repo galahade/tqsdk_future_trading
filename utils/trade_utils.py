@@ -35,6 +35,6 @@ def wait_to_trade(api: TqApi, trade_type: int, db: database.Database) -> None:
 
 
 def get_trade_config() -> dict:
-    with open('utils/trade_config.yaml', 'r') as f:
+    with open('conf/trade_config.yaml', 'r') as f:
         trade_config = yaml.safe_load(f.read())
         return trade_config

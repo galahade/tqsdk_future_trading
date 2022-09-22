@@ -11,6 +11,7 @@ services:
       MONGO_CONF_FILE: /run/secrets/mongo_conf_file
       TQ_CONF_FILE: /run/secrets/tq_conf_file
       ROHON_CONF_FILE: /run/secrets/rohon_conf_file
+      RUNTIME_ENV: 0
     secrets:
       - mongo_conf_file
       - tq_conf_file
