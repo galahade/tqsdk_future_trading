@@ -1,6 +1,6 @@
 from tqsdk2 import TqApi, TqAuth, TqSim, TqRohon
 from utils.trade_utils import wait_to_trade
-from utils.tools import get_yaml_config
+from utils.tools import get_yaml_config, send_msg
 from pymongo import MongoClient
 import os
 from datetime import datetime
@@ -31,6 +31,7 @@ def trade(trade_type: int):
     logger.info(f'账户信息:{api.get_account()}')
     client = MongoClient(mongo_url)
     db = client.get_database('future_trade')
+    send_msg('future trade', 'Start to trade')
     wait_to_trade(api, trade_type, db)
 
 

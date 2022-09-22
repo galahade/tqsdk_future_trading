@@ -4,6 +4,18 @@ from tqsdk2.ta import EMA, MACD
 from tqsdk2 import tafunc
 from datetime import datetime
 import yaml
+import requests
+
+
+def send_msg(title: str, content: str):
+    ''' 使用 Server Chan 发送相关消息。
+    参考地址：https://sct.ftqq.com/after
+    '''
+    send_key = 'SCT172591Tn14G9JYc890AUJyvsNUiuCcL'
+    url = f'https://sctapi.ftqq.com/{send_key}.send'
+    headers = {"content-type": "application/x-www-form-urlencoded"}
+    data = {'title': title, 'channel': 9, 'desp': content}
+    requests.post(url, data=data, headers=headers)
 
 
 def get_custom_symbol(zl_symbol: str, l_or_s: bool) -> str:

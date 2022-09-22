@@ -16,7 +16,6 @@ services:
 
   mongo:
     image: mongo
-    restart: always
     ports:
       - 27019:27017
     volumes:
