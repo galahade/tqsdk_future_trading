@@ -28,7 +28,6 @@ def trade(trade_type: int):
     logger = logging.getLogger(__name__)
     mongo_url = (f'mongodb://{mongo_user}:{mongo_pasw}'
                  f'@{mongo_host}:{mongo_port}/')
-    print(f'runtime:{runtime_env == 0}')
     if runtime_env == 0:
         api = TqApi(get_test_acc(), auth=TqAuth(tq_user, tq_pass))
     else:
