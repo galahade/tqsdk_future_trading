@@ -30,6 +30,8 @@ export MONGO_PORT=27017
 ## Docker Command
 
 ```
+# Apple M1 build command
+docker buildx build --platform linux/amd64 -t  galahade/future-trade-docker .
 docker build --tag galahade/future-trade-docker .
 docker build --no-cache --tag galahade/future-trade-docker .
 docker run -e TZ=Asia/Shanghai --rm -ti galahade/future-trade-docker /bin/bash

@@ -511,7 +511,8 @@ class FutureTradeShort(FutureTrade):
         temp_date = tafunc.time_to_datetime(l30m_kline.datetime)
         l_date = tafunc.time_to_ns_timestamp(
             datetime(temp_date.year, temp_date.month, temp_date.day))
-
+        print(l_date)
+        print(d_klines)
         l_kline = d_klines[d_klines.datetime == l_date].iloc[0]
         # logger.debug(f'当前日线id:{kline.id},最近一次交叉K线id:{l_kline.id},')
         # logger.debug(log_str.format(
