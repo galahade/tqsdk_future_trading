@@ -1,29 +1,28 @@
+import os
 from utils import common
 import sys
 import logging
-import backtest
-import start_trading
+from trading_department.managers import Manager
 
 now = common.now
 is_back_test = False
 start_year = now.year
 start_month = 1
 end_year = now.year
-log_level = "warning"
+log_level = "info"
 trade_type = 2
+env_name = os.environ['ENV_NAME']
 
 
 def main():
     try:
         common.get_argumets()
-        common.setup_log_config(log_level)
+        log_config_file = f'log_config_{env_name}'
+        common.setup_log_config(log_level, log_config_file)
         logger = logging.getLogger(__name__)
-        if is_back_test:
-            logger.debug("开始进行回测")
-            backtest.trade(trade_type, start_year, start_month, end_year)
-        else:
-            logger.debug("开始进行正式交易")
-            start_trading.trade(trade_type)
+        manager = Manager(trade_type, is_back_test, start_year,
+                          start_month, end_year)
+        manager.start_trading()
     except Exception as e:
         logger.exception(e)
         return str(e)

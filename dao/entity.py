@@ -1,5 +1,4 @@
-from utils.tools import get_custom_symbol
-# from bson.objectid import ObjectId
+from utils.common_tools import get_custom_symbol
 
 
 class Trade_Data:
@@ -72,6 +71,14 @@ class TradeStatusInfo:
         else:
             return False
 
+    def has_change_symbol(self, new_symbol):
+        result = False
+        if new_symbol is not None:
+            if (new_symbol != self.current_symbol and
+               new_symbol != self.next_symbol):
+                result = True
+        return result
+
 
 class TradePosInfo:
     def __init__(self, tsi: TradeStatusInfo, l_or_s: bool,  commission: float,
@@ -84,28 +91,26 @@ class TradePosInfo:
 
 
 class OpenPosInfo(TradePosInfo):
-    def __init__(self, tsi: TradeStatusInfo, l_or_s: bool, commission: float,
-                 balance: float) -> None:
-        super().__init__(tsi, l_or_s, commission, balance)
-        self.trade_price = tsi.trade_data.price
-        self.trade_number = tsi.trade_data.pos
-        self.daily_cond = tsi.judge_data.d_cond
-        self.h3_cond = tsi.judge_data.h3_cond
-        self.stop_loss_price = tsi.trade_data.slp
-        self.stop_profit_point = tsi.trade_data.spp
-        self.close_pos_ids: list(str) = []
-
-    def add_close_info(self, close_pos_id) -> None:
-        self.close_pos_ids.append(close_pos_id)
+    def __init__(self, tsi: TradeStatusInfo = None, l_or_s=False,
+                 commission=0.0, balance=0.0) -> None:
+        if tsi is not None:
+            super().__init__(tsi, l_or_s, commission, balance)
+            self.trade_price = tsi.trade_data.price
+            self.trade_number = tsi.trade_data.pos
+            self.daily_cond = tsi.judge_data.d_cond
+            self.h3_cond = tsi.judge_data.h3_cond
+            self.stop_loss_price = tsi.trade_data.slp
+            self.stop_profit_point = tsi.trade_data.spp
 
 
 class ClosePosInfo(TradePosInfo):
-    def __init__(self, tsi: TradeStatusInfo, l_or_s: bool, commission: float,
-                 balance: float, float_profit: float, close_price: float,
-                 close_pos: int, close_reason: str) -> None:
-        super().__init__(tsi, l_or_s, commission, balance)
+    def __init__(self, tsi: TradeStatusInfo = None, l_or_s=False,
+                 commission=0.0, balance=0.0, float_profit=0.0,
+                 close_price=0.0, close_pos=0, close_reason='') -> None:
+        if tsi is not None:
+            super().__init__(tsi, l_or_s, commission, balance)
+            self.open_pos_id = tsi.trade_data.open_pos_id
         self.trade_price = close_price
         self.trade_number = close_pos
-        self.open_ops_id = tsi.trade_data.open_pos_id
         self.float_profit = float_profit
         self.close_reason = close_reason

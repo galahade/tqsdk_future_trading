@@ -11,12 +11,12 @@ services:
       MONGO_CONF_FILE: /run/secrets/mongo_conf_file
       TQ_CONF_FILE: /run/secrets/tq_conf_file
       ROHON_CONF_FILE: /run/secrets/rohon_conf_file
-      RUNTIME_ENV: 1
+      ACCOUNT_TYPE: 0
+      ENV_NAME: prod
     secrets:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
-
   mongo:
     image: mongo
     ports:
@@ -28,13 +28,10 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
-
 volumes:
   trade-mongo-data:
-
 networks:
   future_trading:
-
 secrets:
   mongo_conf_file:
     file: secrets/mongo_config.yaml

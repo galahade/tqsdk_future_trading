@@ -1,11 +1,12 @@
 from math import floor
-from tqsdk2 import TqApi, TargetPosTask, tafunc
+# from tqsdk2 import TqApi, TargetPosTask, tafunc
+from tqsdk import TargetPosTask, tafunc
 from utils.tools import get_date_str, get_date_str_short, diff_two_value,\
-    calc_indicator, is_nline, send_msg
+        calc_indicator, is_nline
 from utils.common import LoggerGetter
 from datetime import datetime
-from trade.utils import TradeUtilsLong, TradeUtilsShort,\
-        Trade_Status_Virtual, TradeUtils
+from trade.utils import TradeUtilsLong, TradeUtilsShort, TradeUtils,\
+        TradeUtilsData
 from dao.entity import TradeStatusInfo
 import numpy as np
 
@@ -16,26 +17,28 @@ class FutureTrade:
     '''
     logger = LoggerGetter()
 
-    def __init__(self, tsi: TradeStatusInfo, api: TqApi, trade_config: dict):
-        self._api = api
-        account = api.get_account()
+    def __init__(self, tsi: TradeStatusInfo, tud: TradeUtilsData):
+        self._api = tud.api
         symbol = tsi.current_symbol
-        quote = self._api.get_quote(symbol)
-        position = api.get_position(symbol)
-        self._trade_tool = TargetPosTask(api, symbol)
-        self._daily_klines = api.get_kline_serial(symbol, 60*60*24).copy()
-        self._h3_klines = api.get_kline_serial(symbol, 60*60*3)
-        self._m30_klines = api.get_kline_serial(symbol, 60*30)
-        self._m5_klines = api.get_kline_serial(symbol, 60*5)
+        position = self._api.get_position(symbol)
+        self.tud = tud
+        self._trade_tool = TargetPosTask(self._api, symbol)
+        if tud.is_backtest:
+            self._daily_klines = self._api.get_kline_serial(symbol, 60*60*24)
+        else:
+            self._daily_klines = self._api.get_kline_serial(
+                symbol, 60*60*24).copy()
+        self._h3_klines = self._api.get_kline_serial(symbol, 60*60*3)
+        self._m30_klines = self._api.get_kline_serial(symbol, 60*30)
+        self._m5_klines = self._api.get_kline_serial(symbol, 60*5)
         self._utils: TradeUtils = self._create_utils(
-            account, position, tsi, quote, trade_config)
+            self._api.get_account(), position, tsi,
+            self._api.get_quote(symbol), tud)
         self.calc_criteria(0)
-        log_str = '合约:{}-pos:{}'
-        self.logger.debug(log_str.format(symbol, position))
 
     def _calc_open_pos_number(self) -> bool:
         utils = self._utils
-        available = utils.account.balance * utils.buy_pos_scale
+        available = utils.account.balance * utils.open_pos_scale
         pos = floor(available / utils.quote.bid_price1)
         return pos
 
@@ -52,37 +55,39 @@ class FutureTrade:
         '''final 方法，进行期货交易。开仓平仓，多空都适用。
         '''
         logger = self.logger
-        utils = self._utils
-        log_str = '{}交易,价格:{}手数:{}'
-        quote = utils.quote
         ts = self._utils
+        log_str = '{}交易,价格:{}手数:{}'
         target_pos = total_pos - sale_pos
         trade_time = ts.get_current_date_str()
-        price = quote.last_price
+        price = ts.quote.last_price
         if target_pos <= 0:
             target_pos = 0
-        self._trade_tool.set_target_volume(self._sale_target_pos(target_pos))
-        while True:
-            self._api.wait_update()
-            if ts._get_pos_number() == target_pos:
-                if sale_pos == 0:
-                    logger.debug(log_str.format(
-                        trade_time, price, total_pos))
-                else:
-                    logger.debug(log_str.format(
-                        trade_time, price, sale_pos))
-                break
+        if not self.tud.just_check:
+            self._trade_tool.set_target_volume(
+                self._sale_target_pos(target_pos))
+            while True:
+                self._api.wait_update()
+                if ts._get_tq_pos_number() == target_pos:
+                    if sale_pos == 0:
+                        logger.debug(log_str.format(
+                            trade_time, price, total_pos))
+                    else:
+                        logger.debug(log_str.format(
+                            trade_time, price, sale_pos))
+                    break
         return target_pos
 
     def _closeout(self, sale_reason: str, is_switch=False) -> None:
-        pos_number = self._utils._get_pos_number()
-        self._sell_and_record_pos(pos_number, sale_reason, is_switch)
+        '''清仓售出
+        '''
+        self._sell_and_record_pos(self._utils.get_pos(),
+                                  sale_reason, is_switch)
 
     def _sell_and_record_pos(self, sale_pos: int, sale_reason: str,
                              is_switch: bool) -> int:
         utils = self._utils
         price = utils.get_current_price()
-        total_pos = utils._get_pos_number()
+        total_pos = utils.get_pos()
         rest_pos = self._trade_pos(total_pos, sale_pos)
         utils.set_close_info(price, sale_pos, sale_reason, is_switch)
         return rest_pos
@@ -95,16 +100,11 @@ class FutureTrade:
         price = utils.get_current_price()
         log_str = '{} {} <多空> {} 现价:{},止损价:{},手数:{}'
         if utils.get_stoplose_status():
-            pos = self._utils._get_pos_number()
+            pos = self._utils.get_pos()
             content = log_str.format(
                 trade_time, utils.tsi.current_symbol, td.slr,
                 price, td.slp, pos)
             logger.info(content)
-            title = '止损'
-            try:
-                send_msg(title, content)
-            except Exception as e:
-                logger.exception(e)
             self._closeout(utils.sl_message)
 
     def _try_open_pos(self) -> bool:
@@ -114,7 +114,7 @@ class FutureTrade:
         utils = self._utils
         td = utils.tsi.trade_data
         jd = utils.tsi.judge_data
-        if utils._get_pos_number():
+        if utils.get_pos():
             return True
         if self._can_open_ops() and jd.d_cond != 0:
             logger = self.logger
@@ -123,15 +123,10 @@ class FutureTrade:
             self._trade_pos(open_pos, 0)
             utils.set_open_info(open_pos)
             trade_time = utils.get_current_date_str()
-            open_pos = utils._get_pos_number()
+            open_pos = utils.get_pos()
             content = log_str.format(
                 trade_time, utils.tsi.current_symbol, td.price, open_pos)
             logger.info(content)
-            title = '开仓'
-            try:
-                send_msg(title, content)
-            except Exception as e:
-                logger.exception(e)
             return True
         return False
 
@@ -140,13 +135,6 @@ class FutureTrade:
         '''
         self._try_stop_loss()
         self._try_stop_profit()
-
-    def try_trade(self) -> None:
-        ''' final 方法，交易类对外接口，
-        每次行情更新时调用这个方法尝试交易
-        '''
-        if self._try_open_pos():
-            self._try_sell_pos()
 
     def _get_last_dk_line(self):
         return self._daily_klines.iloc[-2]
@@ -184,6 +172,10 @@ class FutureTrade:
             self._m5_klines = self._api.get_kline_serial(symbol, 60*5)
         return self._m5_klines.iloc[-2]
 
+    def _has_checked(self, kline, test_name) -> bool:
+        return (kline.get(test_name, default=-1) != -1
+                and not (np.isnan(kline[test_name])))
+
     def get_Kline_values(self, kline) -> tuple:
         ema9 = kline.ema9
         ema22 = kline.ema22
@@ -197,7 +189,7 @@ class FutureTrade:
     def calc_criteria(self, k_type: int):
         '''计算某个周期的技术指标
         k_type 用来表示具体周期：
-        1:日线，2:2小时线，3:30分钟线，4:5分钟线
+        1:日线，2:2小时线，3:30分钟线，4:5分钟线, 0: 技术以上全部均线
         '''
         if k_type == 1:
             calc_indicator(self._daily_klines)
@@ -212,6 +204,13 @@ class FutureTrade:
             calc_indicator(self._h3_klines)
             calc_indicator(self._m30_klines)
             calc_indicator(self._m5_klines)
+
+    def try_trade(self) -> None:
+        ''' final 方法，交易类对外接口，
+        每次行情更新时调用这个方法尝试交易
+        '''
+        if self._try_open_pos():
+            self._try_sell_pos()
 
     def is_changing(self, k_type: int) -> bool:
         '''当某种K线生成新的记录时返回True
@@ -238,7 +237,7 @@ class FutureTrade:
             return self._api.is_changing(
                 self._daily_klines.iloc[-1], "close")
 
-    def finish(self) -> None:
+    def finish(self):
         '''换月操作，代表当前交易已完成。
         如果当前合约交易有持仓，则全部平仓，
         并将tsi状态设置成下一个合约的初始状态
@@ -258,15 +257,14 @@ class FutureTrade:
         else:
             tsi.switch_symbol(utils.get_current_date())
             utils.update_tsi()
+        return self.create_new_one()
 
 
 class FutureTradeShort(FutureTrade):
     '''做空交易类
     '''
-    def _create_utils(self, account, position, tsi, quote,
-                      trade_config) -> TradeUtilsShort:
-        rules = trade_config['short']
-        return TradeUtilsShort(account, position, tsi, quote, rules)
+    def _create_utils(self, account, position, tsi, quote, tud):
+        return TradeUtilsShort(account, position, tsi, quote, tud)
 
     def _not_match_dk_cond(self) -> bool:
         # logger = self.logger
@@ -311,7 +309,7 @@ class FutureTradeShort(FutureTrade):
         log_str = ('{} {} <做空> {} 日线{} K线时间:{} ema9:{} ema22:{} '
                    'ema60:{} 收盘:{} MACD:{}')
         is_match = False
-        if kline.get('s_qualified', default=-1) != -1:
+        if (self._has_checked(kline, 's_qualified')):
             return kline['s_qualified']
         else:
             # 日线条件1
@@ -333,9 +331,6 @@ class FutureTradeShort(FutureTrade):
                 trade_time, symbol, match_str, '', daily_k_time,
                 e9, e22, e60, close, macd)
             logger.info(content)
-            if is_match:
-                title = '做空日线'
-                send_msg(title, content)
         return is_match
 
     def _match_3hk_cond(self) -> bool:
@@ -343,7 +338,7 @@ class FutureTradeShort(FutureTrade):
         '''
         logger = self.logger
         kline = self._get_s_last_h3_kline()
-        if kline.get('s_qualified', default=-1) != -1:
+        if (self._has_checked(kline, 's_qualified')):
             return kline['s_qualified']
         utils = self._utils
         kline = self._get_last_h3_kline()
@@ -364,7 +359,7 @@ class FutureTradeShort(FutureTrade):
                                 's_qualified'] = 1
             utils.set_last_h3_kline(kline)
             is_match = True
-        if kline.get('s_qualified', default=-1) == -1:
+        if not is_match:
             self._h3_klines.loc[self._h3_klines.id == kline.id,
                                 's_qualified'] = 0
         match_str = '满足' if is_match else '不满足'
@@ -373,9 +368,6 @@ class FutureTradeShort(FutureTrade):
             kline_time, e9, e22,
             e60, close, open_p, diffc_60, diff9_60, diff22_60, macd)
         logger.info(content)
-        if is_match:
-            title = '做空3小时线'
-            send_msg(title, content)
         return is_match
 
     def _match_30mk_cond(self) -> bool:
@@ -383,7 +375,7 @@ class FutureTradeShort(FutureTrade):
         '''
         logger = self.logger
         kline = self._get_s_last_m30_kline()
-        if kline.get('s_qualified', default=-1) != -1:
+        if (self._has_checked(kline, 's_qualified')):
             return kline['s_qualified']
         utils = self._utils
         kline = self._get_last_m30_kline()
@@ -404,8 +396,6 @@ class FutureTradeShort(FutureTrade):
                 trade_time, utils.tsi.current_symbol, kline_time,
                 e9, e22, e60, close, diff22_60, diff9_60, macd)
             logger.info(content)
-            title = '做空30分钟线'
-            send_msg(title, content)
             return True
         self._m30_klines.loc[self._m30_klines.id == kline.id,
                              's_qualified'] = 0
@@ -454,11 +444,6 @@ class FutureTradeShort(FutureTrade):
                             t_macd, t_dk.close, t_dk.open
                         )
                         logger.info(content)
-                        title = '做空止盈'
-                        try:
-                            send_msg(title, content)
-                        except Exception as e:
-                            logger.exception(e)
                         return
                 td.stp = True
                 utils.update_tsi()
@@ -511,8 +496,6 @@ class FutureTradeShort(FutureTrade):
         temp_date = tafunc.time_to_datetime(l30m_kline.datetime)
         l_date = tafunc.time_to_ns_timestamp(
             datetime(temp_date.year, temp_date.month, temp_date.day))
-        print(l_date)
-        print(d_klines)
         l_kline = d_klines[d_klines.datetime == l_date].iloc[0]
         # logger.debug(f'当前日线id:{kline.id},最近一次交叉K线id:{l_kline.id},')
         # logger.debug(log_str.format(
@@ -535,14 +518,15 @@ class FutureTradeShort(FutureTrade):
             return True
         return False
 
+    def create_new_one(self):
+        return FutureTradeShort(self._utils.tsi, self.tud)
+
 
 class FutureTradeLong(FutureTrade):
     '''做多交易类
     '''
-    def _create_utils(self, account, position, tsi, quote,
-                      trade_config) -> TradeUtilsLong:
-        rules = trade_config['long']
-        return TradeUtilsLong(account, position, tsi, quote, rules)
+    def _create_utils(self, account, position, tsi, quote, tud):
+        return TradeUtilsLong(account, position, tsi, quote, tud)
 
     def _match_dk_cond(self) -> bool:
         '''做多日线条件检测
@@ -567,7 +551,7 @@ class FutureTradeLong(FutureTrade):
                    'MACD:{}')
         is_match = False
         cond_number = 0
-        if kline.get('l_qualified', default=-1) != -1:
+        if self._has_checked(kline, 'l_qualified'):
             return kline['l_qualified']
         else:
             diff9_60 = diff_two_value(e9, e60)
@@ -622,9 +606,6 @@ class FutureTradeLong(FutureTrade):
             trade_time, s, match_str, cond_number, daily_k_time,
             e9, e22, e60, close, diff9_60, diffc_60, diff22_60, macd)
         logger.info(content)
-        if is_match:
-            title = '做多日线'
-            send_msg(title, content)
         return is_match
 
     def _match_3hk_cond(self) -> bool:
@@ -632,7 +613,7 @@ class FutureTradeLong(FutureTrade):
         '''
         logger = self.logger
         kline = self._get_s_last_h3_kline()
-        if kline.get('l_qualified', default=-1) != -1:
+        if self._has_checked(kline, 'l_qualified'):
             return kline['l_qualified']
         utils = self._utils
         jd = utils.tsi.judge_data
@@ -694,7 +675,7 @@ class FutureTradeLong(FutureTrade):
                     utils.set_last_h3_kline(4, kline)
                     cond_number = 4
                     is_match = True
-        if kline.get('l_qualified', default=-1) == -1:
+        if not cond_number:
             self._h3_klines.loc[self._h3_klines.id == kline.id,
                                 'l_qualified'] = 0
         match_str = '满足' if is_match else '不满足'
@@ -702,9 +683,6 @@ class FutureTradeLong(FutureTrade):
             trade_time, s, match_str, cond_number, kline_time, e9, e22, e60,
             close, open_p, diffc_60, diffo_60, diff22_60, macd)
         logger.info(content)
-        if is_match:
-            title = '做多3小时线'
-            send_msg(title, content)
         return is_match
 
     def _match_3hk_c2_distance(self) -> bool:
@@ -748,7 +726,7 @@ class FutureTradeLong(FutureTrade):
         '''
         logger = self.logger
         kline = self._get_s_last_m30_kline()
-        if kline.get('l_qualified', default=-1) != -1:
+        if self._has_checked(kline, 'l_qualified'):
             return kline['l_qualified']
         utils = self._utils
         s = utils.tsi.current_symbol
@@ -765,7 +743,7 @@ class FutureTradeLong(FutureTrade):
                                  'l_qualified'] = 1
             utils.set_last_m30_kline(kline)
             is_match = True
-        if kline.get('l_qualified', default=-1) == -1:
+        if not is_match:
             self._m30_klines.loc[self._m30_klines.id == kline.id,
                                  'l_qualified'] = 0
         match_str = '满足' if is_match else '不满足'
@@ -773,9 +751,6 @@ class FutureTradeLong(FutureTrade):
             trade_time, s, match_str, kline_time, e9, e22, e60,
             close, diffc_60, macd)
         logger.info(content)
-        if is_match:
-            title = '做多30分钟线'
-            send_msg(title, content)
         return is_match
 
     def _match_5mk_cond(self) -> bool:
@@ -783,7 +758,7 @@ class FutureTradeLong(FutureTrade):
         '''
         logger = self.logger
         kline = self._get_s_last_m5_kline()
-        if kline.get('l_qualified', default=-1) != -1:
+        if self._has_checked(kline, 'l_qualified'):
             return kline['l_qualified']
         utils = self._utils
         s = utils.tsi.current_symbol
@@ -799,12 +774,9 @@ class FutureTradeLong(FutureTrade):
                 trade_time, s, kline_time, e9, e22, e60,
                 close, diffc_60, macd)
             logger.info(content)
-            title = '做多5分钟线'
-            send_msg(title, content)
             return True
-        if kline.get('l_qualified', default=-1) == -1:
-            self._m5_klines.loc[self._m5_klines.id == kline.id,
-                                'l_qualified'] = 0
+        self._m5_klines.loc[self._m5_klines.id == kline.id,
+                            'l_qualified'] = 0
         return False
 
     def _sale_target_pos(self, target_pos) -> int:
@@ -823,95 +795,33 @@ class FutureTradeLong(FutureTrade):
         sp_log = '止盈{}-售出{}'
         trade_time = utils.get_current_date_str()
         price = utils.get_current_price()
-        # ts.update_profit_stage(dk, m30k)
         if utils.get_profit_status() in [1, 2, 3]:
             utils.try_improve_sl_price()
-            result = utils.is_final5_closeout(dk)
-            if result:
-                sold_pos = utils._get_pos_number()
+            if utils.is_final5_closeout(dk):
+                sold_pos = utils.get_pos()
                 self._closeout(sp_log.format(td.p_cond, '100%'))
                 content = log_str.format(
                     trade_time, s, td.p_cond, price, sold_pos, 0, td.spp)
                 logger.info(content)
-                title = '做多止盈'
-                try:
-                    send_msg(title, content)
-                except Exception as e:
-                    logger.exception(e)
         elif utils.get_profit_status() in [4]:
             if td.p_stage == 1:
                 td.p_stage = 2
-                sold_pos = utils._get_pos_number()//2
+                sold_pos = utils.get_pos()//2
                 rest_pos = self._sell_and_record_pos(
                     sold_pos, sp_log.format(td.p_cond, '50%'), False)
                 content = log_str.format(
                     trade_time, s, td.p_cond, price,
                     sold_pos, rest_pos, td.spp)
                 logger.info(content)
-                title = '做多止盈'
-                try:
-                    send_msg(title, content)
-                except Exception as e:
-                    logger.exception(e)
                 utils.update_tsi()
             elif td.p_stage == 2:
                 if (utils.get_current_price() >=
                    utils.calc_price(td.price, True, 3)):
-                    sold_pos = utils._get_pos_number()
+                    sold_pos = utils.get_pos()
                     self._closeout(sp_log.format(td.p_cond, '剩余全部'))
                     content = log_str.format(
                         trade_time, s, td.p_cond, price, sold_pos, 0, td.spp)
                     logger.info(content)
-                    title = '做多止盈'
-                    try:
-                        send_msg(title, content)
-                    except Exception as e:
-                        logger.exception(e)
 
-    def buy_pos(self, tsv: Trade_Status_Virtual) -> None:
-        '''弃用，暂时不使用虚拟开仓逻辑换月时，如果虚拟交易有持仓，则直接现价买入
-        '''
-        logger = self.logger
-        log_str = '{} {} <做多>换月开仓,开仓价:{},数量{}'
-        utils = self._utils
-        trade_time = utils.get_current_date_str()
-        price = utils.get_current_price()
-        if tsv.is_trading:
-            logger = self.logger
-            self._trade_pos(tsv._pos_quantity, 0)
-            logger.info(log_str.format(
-                trade_time, self._symbol, price, tsv._pos_quantity))
-            self._ts = tsv.create_tsl()
-            self._ts._record_to_excel()
-
-
-class Future_Trade_Long_Virtual(FutureTradeLong):
-    '''弃用虚拟开仓方法。虚拟做多交易类,用于跟踪期货下一个合约的交易状态。
-    如果符合交易条件，则记录当时的止盈止损价格，并在之后跟踪调整止盈点位。
-    当换月时，根据该对象的状态决定是否买入换月后的合约。
-    '''
-    def __init__(self, tsi: TradeStatusInfo, api: TqApi, symbol: str,
-                 symbol_config: dict) -> None:
-        super().__init__(tsi, api, symbol, symbol_config)
-        self._ts = Trade_Status_Virtual(
-            self._account, self._pos, symbol,
-            self._quote, self._ts.rules)
-
-    def _sell_and_record_pos(self, sale_pos: int, sale_reason: str) -> int:
-        logger = self.logger
-        logger.debug('虚拟交易清仓')
-        ts = self._ts
-        price = ts.get_current_price()
-        total_pos = ts._get_pos_number()
-        rest_pos = total_pos - sale_pos
-        ts.set_close_info(price, sale_pos, sale_reason)
-        return rest_pos
-
-    def _trade_pos(self, total_pos, sale_pos):
-        logger = self.logger
-        target_pos = total_pos - sale_pos
-        logger.debug(f'虚拟交易,目标仓位{target_pos}')
-        return target_pos
-
-    def get_trade_status(self) -> Trade_Status_Virtual:
-        return self._ts
+    def create_new_one(self):
+        return FutureTradeLong(self._utils.tsi, self.tud)

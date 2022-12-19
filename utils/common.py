@@ -45,12 +45,31 @@ def get_argumets():
             __main__.end_year = args.end_year
 
 
+def get_init_db_args():
+    '''为初始化期货交易配置信息获取数据库相关信息
+    '''
+    _parser = argparse.ArgumentParser(prog="tqsdk_future_db_init",
+                                      description="初始化期货配置数据")
+
+    _parser.add_argument("-p", "--port", default=27017, help="DB端口号")
+    _parser.add_argument("-l", "--host", type=str, default='localhost',
+                         help="DB主机地址")
+    _parser.add_argument("-u", "--user", type=str, default='root',
+                         help="DB用户名")
+    _parser.add_argument("-s", "--password", type=str, default='example',
+                         help="DB密码")
+    _parser.add_argument("-n", "--name", type=str, default='future_trade',
+                         help="DB数据库名称")
+    args = _parser.parse_args()
+    return (args.port, args.host, args.user, args.password, args.name)
+
+
 # 根据命令行配置设置日志等级，如不指定，默认为warning
-def setup_log_config(log_level):
+def setup_log_config(log_level, config_file_name='log_config'):
     numeric_level = getattr(logging, log_level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % log_level)
-    with open('utils/log_config.yaml', 'r') as f:
+    with open(f'conf/{config_file_name}.yaml', 'r') as f:
         config = yaml.safe_load(f.read())
         logging.config.dictConfig(config)
 

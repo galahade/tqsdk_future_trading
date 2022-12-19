@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   app:
-    image: galahade/future-trade-test-docker:v1.0
+    image: galahade/future-trade-docker:latest
     working_dir: /app
     networks:
       - future_trading
@@ -12,22 +12,25 @@ services:
       TQ_CONF_FILE: /run/secrets/tq_conf_file
       ROHON_CONF_FILE: /run/secrets/rohon_conf_file
       ACCOUNT_TYPE: 0
-      ENV_NAME: test
+      ENV_NAME: backtest
     secrets:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
+    command: python3 main.py -t -s 2018 -m 1 -e 2022 -tt 1
   mongo:
     image: mongo
     ports:
-      - 27019:27017
+      - 27016:27017
     volumes:
-      - trade-mongo-test-data:/data/db
+      - trade-mongo-data:/data/db
+    networks:
+      - future_trading
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
 volumes:
-  trade-mongo-test-data:
+  trade-mongo-data:
 networks:
   future_trading:
 secrets:

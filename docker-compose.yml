@@ -5,26 +5,32 @@ services:
     working_dir: /app
     volumes:
       - ".:/app"
+      - future-trade-log-data:/log
     depends_on:
       - mongo
     environment:
       MONGO_CONF_FILE: /run/secrets/mongo_conf_file
       TQ_CONF_FILE: /run/secrets/tq_conf_file
       ROHON_CONF_FILE: /run/secrets/rohon_conf_file
-      RUNTIME_ENV: 0
+      ACCOUNT_TYPE: 0
+      ENV_NAME: dev
     secrets:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
-
   mongo:
-    image: mongo:latest
+    image: mongo
     ports:
       - 27018:27017
+    volumes:
+      - trade-mongo-dev-data:/data/db
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
-
+volumes:
+  trade-mongo-dev-data:
+  future-trade-log-data:
+    external: true
 secrets:
   mongo_conf_file:
     file: secrets/mongo_config.yaml

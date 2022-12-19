@@ -25,6 +25,7 @@ shinny-structlog==0.0.4; python_version >= '3.6'
 simplejson==3.17.6; python_version >= '2.5' and python_version not in '3.0, 3.1, 3.2, 3.3'
 six==1.16.0; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'
 tqsdk2==2.1.7
+tqsdk==3.3.0
 urllib3==1.26.12; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5' and python_version < '4'
 websockets==10.3; python_version >= '3.7'
 yarl==1.8.1; python_version >= '3.7'
