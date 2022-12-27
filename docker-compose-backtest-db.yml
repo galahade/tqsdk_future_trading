@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  mongo:
+    image: mongo
+    ports:
+      - 27016:27017
+    volumes:
+      - trade-mongo-data:/data/db
+    networks:
+      - database
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+volumes:
+  trade-mongo-data:
+networks:
+  database:

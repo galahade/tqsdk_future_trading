@@ -1,12 +1,10 @@
 version: "3.8"
 services:
   app:
-    image: galahade/future-trade-docker:latest
+    image: galahade/future-trade-dev:latest
     working_dir: /app
-    networks:
-      - future_trading
-    depends_on:
-      - mongo
+    volumes:
+      - ".:/app"
     environment:
       MONGO_CONF_FILE: /run/secrets/mongo_conf_file
       TQ_CONF_FILE: /run/secrets/tq_conf_file
@@ -17,22 +15,13 @@ services:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
-    command: python3 main.py -t -s 2018 -m 1 -e 2022 -tt 1
-  mongo:
-    image: mongo
-    ports:
-      - 27016:27017
-    volumes:
-      - trade-mongo-data:/data/db
-    networks:
-      - future_trading
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+    command: python3 main.py -t -s 2018 -m 1 -e 2022 -tt 2
 volumes:
   trade-mongo-data:
 networks:
-  future_trading:
+  default:
+    name: backtest-db_database
+    external: true
 secrets:
   mongo_conf_file:
     file: secrets/mongo_config.yaml

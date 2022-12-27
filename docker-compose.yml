@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   app:
-    image: galahade/future-trade-docker:latest
+    image: galahade/future-trade-dev:latest
     working_dir: /app
     volumes:
       - ".:/app"

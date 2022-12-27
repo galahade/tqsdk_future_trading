@@ -62,3 +62,19 @@ docker volume create future-trade-log-data
 docker run -it -v future-trade-log-data:/log --rm bash:4.4
 
 ```
+
+### Backtest deploy
+
+1. 首先使用`docker-compose-backtest-db.yml`部署回测数据库主机
+    ```
+    docker stack deploy -c docker-compose-backtest-db.yml backtest-db
+    ```
+2.
+修改`conf/trade_config_backtest.yaml`中需要进行回测的品种的，分别使用`docker-compose-backtest.yml'部署回测执行主机。
+    ```
+    docker stack deploy -c docker-compose-backtest.yml backtest1
+    ```
+3. 记录每个回测使用的数据库名称，使用命令将结果导出到excel文件。
+    ```
+    python generate_excel.py -n DB_NAME -p 27016
+    ```
