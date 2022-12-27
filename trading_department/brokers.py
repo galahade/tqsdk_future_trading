@@ -101,9 +101,9 @@ class LongTermTradeBrokerManager:
         '''每日交易前对期货合约进行检查，判断是否需要进行换月
         '''
         if self._long_ftu:
-            return self._long_ftu.daily_check_task()
+            self._long_ftu.daily_check_task()
         if self._short_ftu:
-            return self._short_ftu.daily_check_task()
+            self._short_ftu.daily_check_task()
 
     def daily_opration(self) -> None:
         '''期货交易操作对外接口。
@@ -154,8 +154,8 @@ class LongTermTradeShortBroker:
         config = self.tud.future_config
         trade_time = utils.get_current_date_str()
         quote = utils.quote
-        self.logger.debug(f'{trade_time} {utils.tsi.current_symbol} '
-                          f'距原合约截止日{quote.expire_rest_days}天')
+        self.logger.info(f'{trade_time} {utils.tsi.current_symbol} '
+                         f'距原合约截止日{quote.expire_rest_days}天')
         if (utils.get_pos() > 0 and
            quote.expire_rest_days <= config.switch_days[0]):
             return True
@@ -176,7 +176,8 @@ class LongTermTradeShortBroker:
         if tsi.has_change_symbol(n_symbol):
             tsi.last_modified = utils.get_current_date()
             self.tud.dbservice.update_tsi_next_symbol(tsi, n_symbol)
-            logger.info(f'{utils.get_current_date_str()} 天勤主力合约已更换,'
+            logger.info(f'{utils.get_current_date_str()}'
+                        f'{self.trade._utils.tsi.custom_symbol} 天勤主力合约已更换,'
                         f'原合约 {tsi.current_symbol},'
                         f'新合约 {n_symbol},开始准备切换合约')
 
@@ -218,7 +219,7 @@ class LongTermTradeShortBroker:
         trade_time = utils.get_current_date()
         o_symbol = utils.tsi.current_symbol
         self.trade = self.trade.finish()
-        logger.info(f'{trade_time} 换月完成:'
+        logger.info(f'{trade_time} {self.trade._utils.tsi.custom_symbol}换月完成:'
                     f'原合约 {o_symbol},'
                     f'新合约 {utils.tsi.current_symbol}')
 
@@ -238,7 +239,7 @@ class LongTermTradeShortBroker:
                 if self._need_switch_contract():
                     self.switch_trade()
                 self._daily_checked = True
-                logger.debug(log_str.format(
+                logger.info(log_str.format(
                     get_date_str(self._zl_quote.datetime),
                     self._get_symbol(),
                     self.trade._utils.tsi.custom_symbol
@@ -249,7 +250,7 @@ class LongTermTradeShortBroker:
                 if self._need_switch_contract():
                     self.switch_trade()
                 self._daily_checked = True
-                logger.debug(log_str.format(
+                logger.info(log_str.format(
                     get_date_str(self._zl_quote.datetime),
                     self._get_symbol(),
                     self.trade._utils.tsi.custom_symbol
