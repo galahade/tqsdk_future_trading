@@ -4,7 +4,7 @@ from tqsdk import TargetPosTask, tafunc
 from utils.tools import get_date_str, get_date_str_short, diff_two_value,\
         calc_indicator, is_nline
 from utils.common import LoggerGetter
-from datetime import datetime
+from datetime import datetime, timedelta
 from trade.utils import TradeUtilsLong, TradeUtilsShort, TradeUtils,\
         TradeUtilsData
 from dao.entity import TradeStatusInfo
@@ -471,51 +471,58 @@ class FutureTradeShort(FutureTrade):
                             e60))
 
     def is_within_2days(self) -> bool:
-        # logger = self.logger
+        logger = self.logger
         utils = self._utils
         trade_time = utils.get_current_date_str()
-        # log_str = ('{}<做空>{}当日K线生成时间{},最近一次30分钟收盘价与EMA60'
-        #            '交叉时间{},ema60:{},close:{},距离在2天内,满足开仓条件')
+        log_str = ('{}<做空>{},当前日k线生成时间:{},最近一次30分钟收盘价与EMA60'
+                   '交叉时间{},交叉前一根30分钟K线ema60:{},close:{}.')
         d_klines = self._daily_klines
         kline = d_klines.iloc[-1]
         last_dkline = self._get_last_dk_line()
         l30m_kline = d_klines.iloc[-9]
-        # c_date = tafunc.time_to_datetime(kline.datetime)
+        c_date = tafunc.time_to_datetime(kline.datetime)
         temp_df = self._m30_klines.iloc[::-1]
         e60, close = 0, 0
         for i, temp_kline in temp_df.iterrows():
             _, _, e60, _, close, open_p, trade_time =\
                 self.get_Kline_values(temp_kline)
             if close >= e60:
-                t30m_kline = self._m30_klines.iloc[i-1]
+                t30m_kline = self._m30_klines.iloc[i+1]
                 _, et22, et60, _, _, _, t_time =\
                     self.get_Kline_values(t30m_kline)
                 if et22 > et60:
                     l30m_kline = t30m_kline
                     break
         temp_date = tafunc.time_to_datetime(l30m_kline.datetime)
-        l_date = tafunc.time_to_ns_timestamp(
-            datetime(temp_date.year, temp_date.month, temp_date.day))
-        l_kline = d_klines[d_klines.datetime == l_date].iloc[0]
-        # logger.debug(f'当前日线id:{kline.id},最近一次交叉K线id:{l_kline.id},')
-        # logger.debug(log_str.format(
-        #     trade_time, self._symbol,
-        #     get_date(c_date), temp_date,
-        #     e60, close
-        # ))
-        limite_day = 2
-        el9, el22, el60, _, cloes_l, _, _ =\
-            self.get_Kline_values(last_dkline)
-        if (diff_two_value(el22, el60) and cloes_l < el60
-           or diff_two_value(el22, el60) > 5):
-            limite_day = 3
-        if kline.id - l_kline.id <= limite_day:
-            # logger.debug(log_str.format(
-            #     trade_time, self._symbol,
-            #     get_date(c_date), get_date(l_date),
-            #     e60, close
-            # ))
-            return True
+        # 当30分钟线生成时间小于21点，其所在日线为当日，否则为下一日日线
+        if temp_date.hour < 21:
+            l_date = tafunc.time_to_ns_timestamp(
+                datetime(temp_date.year, temp_date.month, temp_date.day))
+        else:
+            l_date = tafunc.time_to_ns_timestamp(
+                datetime(temp_date.year, temp_date.month,
+                         temp_date.day)+timedelta(days=1))
+        l_klines = d_klines[d_klines.datetime <= l_date]
+        if not l_klines.empty:
+            l_kline = l_klines.iloc[-1]
+            logger.debug(log_str.format(
+                trade_time, utils.tsi.current_symbol,
+                c_date, temp_date, e60, close
+            ))
+            logger.debug(f'当前日线id:{kline.id},生成时间:{c_date},'
+                         f'交叉当时K线id:{l_kline.id},生成时间:'
+                         f'{tafunc.time_to_datetime(l_kline.datetime)}')
+            limite_day = 2
+            el9, el22, el60, _, cloes_l, _, _ =\
+                self.get_Kline_values(last_dkline)
+            if (diff_two_value(el22, el60) and cloes_l < el60
+               or diff_two_value(el22, el60) > 5):
+                limite_day = 3
+            if kline.id - l_kline.id <= limite_day:
+                logger.debug(
+                    f'满足做空30分钟条件，两个日线间隔在{limite_day}日内。'
+                )
+                return True
         return False
 
     def create_new_one(self):
