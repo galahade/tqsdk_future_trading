@@ -40,7 +40,7 @@ class Trade_Sheet:
         cfp = self._calc_float_profit(opi)
         self.total_profit += cfp
         if self.failback + cfp > 0:
-                self.failback = 0
+            self.failback = 0
         else:
             self.failback += cfp
         if self.failback < self.maxfailback:
@@ -86,7 +86,9 @@ class Trade_Sheet:
         sell_total = 0
         for cpi in opi.close_pos_infos:
             sell_total += cpi.trade_price * cpi.trade_number * c_m
-        return 0 if sell_total == 0 else sell_total - buy_total
+        result = (sell_total - buy_total if opi.l_or_s else
+                  buy_total - sell_total)
+        return 0 if sell_total == 0 else result
 
     def finish(self):
         st = self.sheet
