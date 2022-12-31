@@ -487,12 +487,16 @@ class FutureTradeShort(FutureTrade):
             _, _, e60, _, close, open_p, trade_time =\
                 self.get_Kline_values(temp_kline)
             if close >= e60:
-                t30m_kline = self._m30_klines.iloc[i+1]
-                _, et22, et60, _, _, _, t_time =\
-                    self.get_Kline_values(t30m_kline)
-                if et22 > et60:
-                    l30m_kline = t30m_kline
+                # 30分钟收盘价和ema60还未交叉，不符合开仓条件
+                if i == 199:
                     break
+                else:
+                    t30m_kline = self._m30_klines.iloc[i+1]
+                    _, et22, et60, _, _, _, t_time =\
+                        self.get_Kline_values(t30m_kline)
+                    if et22 > et60:
+                        l30m_kline = t30m_kline
+                        break
         temp_date = tafunc.time_to_datetime(l30m_kline.datetime)
         # 当30分钟线生成时间小于21点，其所在日线为当日，否则为下一日日线
         if temp_date.hour < 21:

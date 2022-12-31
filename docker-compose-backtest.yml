@@ -3,6 +3,9 @@ services:
   app:
     image: galahade/future-trade-dev:latest
     working_dir: /app
+    deploy:
+      restart_policy:
+        condition: none
     volumes:
       - ".:/app"
     environment:
@@ -15,7 +18,7 @@ services:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
-    command: python3 main.py -t -s 2018 -m 1 -e 2022 -tt 2
+    command: python3 main.py -t -s 2022 -m 10 -e 2022 -tt 2
 volumes:
   trade-mongo-data:
 networks:
