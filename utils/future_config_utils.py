@@ -16,11 +16,12 @@ def get_trade_config_from_file(file_name='trade_config.yaml') -> dict:
 
 def store_future_config_to_db(mongo_user='root', mongo_pasw='example',
                               mongo_host='localhost', mongo_port=27019,
-                              name='future_trade'):
+                              name='future_trade',
+                              config_file='trade_config.yaml'):
     # logger = get_logger()
     mongo_url = (f'mongodb://{mongo_user}:{mongo_pasw}'
                  f'@{mongo_host}:{mongo_port}/')
-    prepare_future_configs('trade_config.yaml',
+    prepare_future_configs(config_file,
                            MongoClient(mongo_url).get_database(name))
 
 

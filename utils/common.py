@@ -60,7 +60,12 @@ def get_init_db_args():
                          help="DB密码")
     _parser.add_argument("-n", "--name", type=str, default='future_trade',
                          help="DB数据库名称")
+    _parser.add_argument("-c", "--configfile", type=str,
+                         default='trade_config.yaml',
+                         help="导入的配置文件名称")
     args = _parser.parse_args()
+    return (args.user, args.password, args.host, args.port, args.name,
+            args.configfile)
     return (args.port, args.host, args.user, args.password, args.name)
 
 

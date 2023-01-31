@@ -13,6 +13,7 @@ from trading_department.brokers import LongTermTradeBrokerManager
 
 
 ACCOUNT_TYPE = int(os.environ['ACCOUNT_TYPE'])
+ACCOUNT_BALANCE = int(os.getenv('ACCOUNT_BALANCE', '10000000'))
 
 
 def get_logger():
@@ -66,7 +67,7 @@ class AuthTool:
         # password = rohon_conf['rohon']['password']
         # self._rohon_account = TqRohon(td_url, broker_id, app_id, auth_code,
         #                              user_name, password)
-        self._test_account = TqSim()
+        self._test_account = TqSim(init_balance=ACCOUNT_BALANCE)
         self.tq_auth = TqAuth(tq_conf['tq']['user'],
                               tq_conf['tq']['password'])
 

@@ -139,3 +139,20 @@ def get_date_from_symbol(symbol_last_part):
     month = temp % 100
     day = 1
     return datetime(year, month, day, 0, 0, 0)
+
+
+def is_trading_time(api, symbol):
+    '''判断是否在交易时间内的方法，如果购买专业版，可以使用天勤提供的方法判断
+    否则，使用简单的时间段进行判断
+    '''
+    now_time = datetime.now().time()
+    result = False
+    try:
+        ts = api.get_trading_status(symbol)
+        if ts.trade_status == "CONTINOUS":
+            result = True
+    except Exception:
+        if ((now_time.hour >= 8 and now_time.hour < 15)
+           or (now_time.hour > 20)):
+            result = True
+    return result

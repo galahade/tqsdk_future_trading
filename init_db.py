@@ -10,9 +10,9 @@ def main():
     try:
         logger = logging.getLogger(__name__)
         logger.debug("开始向数据库导入期货配置数据")
-        port, host, user, password, name = get_init_db_args()
         future_config_utils.store_future_config_to_db(
-            user, password, host, port, name)
+            *get_init_db_args()
+        )
     except Exception as e:
         logger.exception(e)
         return str(e)
