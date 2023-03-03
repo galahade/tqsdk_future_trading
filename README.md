@@ -110,7 +110,7 @@ python main.py
 
     ```
     # 使用默认配置
-    python init_db.py -p 27010 -l localhost -u root -s example
+     
     
     python init_db.py -p 27010 -l localhost -u root -s example -n bottom_future_trade -c trade_config_young.yaml
     ```

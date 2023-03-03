@@ -66,6 +66,7 @@ def _get_trade_status_info(zl_symbol: str, l_or_s: bool) -> TradeStatusInfo:
     if db_data is not None:
         tsi = TradeStatusInfo(zl_symbol)
         tsi._id = db_data.get('_id')
+        tsi.custom_symbol = db_data.get('custom_symbol')
         tsi.current_symbol = db_data.get('current_symbol')
         tsi.next_symbol = db_data.get('next_symbol')
         tsi.is_trading = db_data.get('is_trading')

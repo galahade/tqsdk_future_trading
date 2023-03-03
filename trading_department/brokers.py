@@ -193,7 +193,7 @@ class LongTermTradeShortBroker:
         if not self.tud.is_backtest:
             if not self._trade_checked and is_trading_time(self._api, symbol):
                 self._trade_checked = True
-                logger.info(log_str.format(
+                logger.debug(log_str.format(
                     get_date_str(self._zl_quote.datetime),
                     self._get_symbol(),
                     self.trade._utils.tsi.custom_symbol
@@ -203,7 +203,7 @@ class LongTermTradeShortBroker:
         else:
             if not self._trade_checked:
                 self._trade_checked = True
-                logger.info(log_str.format(
+                logger.debug(log_str.format(
                     get_date_str(self._zl_quote.datetime),
                     self._get_symbol(),
                     self.trade._utils.tsi.custom_symbol
@@ -236,7 +236,7 @@ class LongTermTradeShortBroker:
                 if self._need_switch_contract():
                     self.switch_trade()
                 self._daily_checked = True
-                logger.info(log_str.format(
+                logger.debug(log_str.format(
                     get_date_str(self._zl_quote.datetime),
                     self._get_symbol(),
                     self.trade._utils.tsi.custom_symbol
@@ -247,7 +247,7 @@ class LongTermTradeShortBroker:
                 if self._need_switch_contract():
                     self.switch_trade()
                 self._daily_checked = True
-                logger.info(log_str.format(
+                logger.debug(log_str.format(
                     get_date_str(self._zl_quote.datetime),
                     self._get_symbol(),
                     self.trade._utils.tsi.custom_symbol
