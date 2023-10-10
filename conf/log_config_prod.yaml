@@ -1,0 +1,57 @@
+version: 1
+formatters:
+  brief:
+    format: '%(levelname)-8s %(name)-15s %(message)s'
+  precise:
+    format: '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: precise
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: precise
+    filename: trade.log
+    mode: w
+    encoding: utf-8
+  rotating_file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: precise
+    filename: /log/future-trade-prod.log
+    maxBytes: 1048576 # 1M
+    backupCount: 10
+    encoding: utf-8
+loggers:
+  __main__:
+loggers:
+  __main__:
+    level: DEBUG
+    handlers: [console, rotating_file]
+    propagate: 0
+  TqApi:
+    level: WARNING
+    handlers: [rotating_file]
+    propagate: 0
+  TqApi.TqConnect:
+    level: WARNING
+    handlers: [console, rotating_file]
+    propagate: 0
+  TqApi.TqAuth:
+    level: WARNING
+    handlers: [rotating_file]
+    propagate: 0
+  TqApi.TqSim:
+    level: WARNING
+    handlers: [rotating_file]
+    propagate: 0
+  websockets:
+    level: WARNING
+    handlers: [rotating_file]
+    propagate: 0
+root:
+  level: DEBUG
+  handlers: [console, rotating_file]

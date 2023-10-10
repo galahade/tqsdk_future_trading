@@ -1,0 +1,47 @@
+version: 1
+formatters:
+  brief:
+    format: '%(levelname)-8s %(name)-15s %(message)s'
+  precise:
+    format: '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: brief
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: brief
+    filename: trade-backtest.log
+    mode: w
+    encoding: utf-8
+loggers:
+  __main__:
+    level: INFO
+    handlers: [console, file]
+    propagate: 0
+  TqApi:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+  TqApi.TqConnect:
+    level: WARNING
+    handlers: [console, file]
+    propagate: 0
+  TqApi.TqAuth:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+  TqApi.TqSim:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+  websockets:
+    level: WARNING
+    handlers: [file]
+    propagate: 0
+root:
+  level: DEBUG
+  handlers: [console, file]

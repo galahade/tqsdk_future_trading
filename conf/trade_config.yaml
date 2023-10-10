@@ -1,0 +1,238 @@
+defaults:
+  switch_days: &switch_days
+    - 20
+    - 45
+  long: &long
+    base_scale: 0.02
+    stop_loss_scale: 1
+    profit_start_scale_1: 3
+    promote_scale_1: 6
+    promote_target_1: 3
+    profit_start_scale_2: 1.5
+    promote_scale_2: 3
+    promote_target_2: 1
+  short: &short
+    base_scale: 0.02
+    stop_loss_scale: 1
+    profit_start_scale: 8
+    promote_scale: 3
+    promote_target: 1
+open_pos_scale: 0.2
+futures:
+  - symbol: KQ.m@DCE.c
+    name: 玉米
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.cs
+    name: 淀粉
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.i
+    name: 铁矿
+    is_active: 1
+    contract_m: 100
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.j
+    name: 焦炭
+    is_active: 1
+    contract_m: 100
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.jm
+    name: 焦煤
+    is_active: 1
+    contract_m: 60
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.l
+    name: 塑料
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.m
+    name: 豆粕
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.p
+    name: 棕榈
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.pp
+    name: PP
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.v
+    name: PVC
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.y
+    name: 豆油
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@DCE.lh
+    name: 生猪
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@CZCE.CF
+    name: 棉花
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@CZCE.TA
+    name: PTA
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@CZCE.FG
+    name: 玻璃
+    is_active: 1
+    contract_m: 20
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@CZCE.OI
+    name: 菜油
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@CZCE.AP
+    name: 苹果
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.cu
+    name: 沪铜
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.au
+    name: 沪金
+    is_active: 1
+    contract_m: 1000
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.ag
+    name: 沪银
+    is_active: 1
+    contract_m: 15
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.zn
+    name: 沪锌
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.al
+    name: 沪铝
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.ru
+    name: 橡胶
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.rb
+    name: 螺纹
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.fu
+    name: 燃油
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.hc
+    name: 热卷
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.bu
+    name: 沥青
+    is_active: 1
+    contract_m: 10
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.pb
+    name: 沪铅
+    is_active: 1
+    contract_m: 5
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.ni
+    name: 沪镍
+    is_active: 1
+    contract_m: 1
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@SHFE.sn
+    name: 沪锡
+    is_active: 1
+    contract_m: 1
+    switch_days: *switch_days
+    long: *long
+    short: *short
+  - symbol: KQ.m@INE.sc
+    name: 原油
+    is_active: 1
+    contract_m: 1000
+    switch_days: *switch_days
+    long: *long
+    short: *short
