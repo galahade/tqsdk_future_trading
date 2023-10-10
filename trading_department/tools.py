@@ -1,12 +1,12 @@
 import os
 from tqsdk import TqAuth, TqSim
 # from tqsdk2 import TqRohon, TqAuth, TqSim
-from utils.tools import get_yaml_config
+from utils.tools import get_yaml_config, sendSystemStartupMsg
 from utils.common import LoggerGetter
 from utils.future_config_utils import prepare_future_configs
 from pymongo import MongoClient
 import uuid
-from datetime import date
+from datetime import date, datetime
 import logging
 import dao.dao_service as dao_service
 from trading_department.brokers import LongTermTradeBrokerManager
@@ -106,6 +106,7 @@ class TradeTool:
         ftu_list = [LongTermTradeBrokerManager(
             api, fc, self.direction, just_check, self.service, is_backtest)
                     for fc in future_configs]
+        sendSystemStartupMsg(datetime.now())
         logger.debug("准备开始交易.")
         api.wait_update()
         logger.debug("天勤服务器端已更新，开始交易日工作")

@@ -1,6 +1,6 @@
 version: "3.8"
 services:
-  mongo:
+  mongo_main:
     image: mongo
     ports:
       - 27016:27017

@@ -18,12 +18,12 @@ services:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
-    command: python3 main.py -t -s 2018 -m 1 -e 2022 -tt 2
+    command: main.py -t -s 2018 -m 1 -e 2023 -tt 2
 volumes:
   trade-mongo-data:
 networks:
   default:
-    name: backtest-db_database
+    name: main-backtest-db_database
     external: true
 secrets:
   mongo_conf_file:

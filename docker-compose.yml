@@ -7,7 +7,7 @@ services:
       - ".:/app"
       - future-trade-log-data:/log
     depends_on:
-      - mongo
+      - mongo_main
     environment:
       MONGO_CONF_FILE: /run/secrets/mongo_conf_file
       TQ_CONF_FILE: /run/secrets/tq_conf_file
@@ -18,17 +18,17 @@ services:
       - mongo_conf_file
       - tq_conf_file
       - rohon_conf_file
-  mongo:
+  mongo_main:
     image: mongo
     ports:
       - 27018:27017
     volumes:
-      - trade-mongo-dev-data:/data/db
+      - mongo-data:/data/db
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
 volumes:
-  trade-mongo-dev-data:
+  mongo-data:
   future-trade-log-data:
     external: true
 secrets:

@@ -23,7 +23,7 @@ docker tag galahade/future-trade-dev galahade/future-trade-dev:v1.2
 
 当开发工作完成后，将代码提交到`main`分支，然后构建测试环境，用来监测各品种的开仓情况。
 
-* **v1. **代表使用tqsdk 作为底层工具
+* **v1.** 代表使用tqsdk 作为底层工具
 * **v2.** 代表使用tqsdk2 作为底层工具
 
 因为tqsdk2 无法在苹果M1-2平台运行，故需要针对不同平台使用不同docker版本。
@@ -37,7 +37,7 @@ docker tag galahade/future-trade-test galahade/future-trade-test:v2.0
 
 该环境用来进行实盘交易，需要配置交易信息，以实现自动化交易。
 
-* **v1. **代表使用tqsdk 作为底层工具
+* **v1.** 代表使用tqsdk 作为底层工具
 * **v2.** 代表使用tqsdk2 作为底层工具
 
 因为tqsdk2 无法在苹果M1-2平台运行，故需要针对不同平台使用不同docker版本。

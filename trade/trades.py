@@ -2,7 +2,7 @@ from math import ceil
 # from tqsdk2 import TqApi, TargetPosTask, tafunc
 from tqsdk import TargetPosTask, tafunc
 from utils.tools import get_date_str, get_date_str_short, diff_two_value,\
-        calc_indicator, is_nline, send_msg
+        calc_indicator, is_nline, sendTradePosMsg
 from utils.common import LoggerGetter
 from datetime import datetime, timedelta
 from trade.utils import TradeUtilsLong, TradeUtilsShort, TradeUtils,\
@@ -128,10 +128,9 @@ class FutureTrade:
                 trade_time, utils.tsi.current_symbol,
                 utils.tsi.custom_symbol, td.price, open_pos)
             logger.info(content.ljust(100, '-'))
-            msg_title = f'{utils.tsi.custom_symbol} 开仓'
-            msg_content = (f'{trade_time} {utils.tsi.current_symbol}'
-                           f'开仓 {open_pos} 手，价格 {td.price}')
-            send_msg(msg_title, msg_content)
+            sendTradePosMsg(
+                utils.tsi.custom_symbol, utils.tsi.current_symbol, True,
+                open_pos, td.price, trade_time)
             return True
         return False
 

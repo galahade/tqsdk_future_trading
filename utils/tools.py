@@ -5,9 +5,33 @@ from tqsdk import tafunc
 from datetime import datetime
 import yaml
 import requests
+from pypushdeer import PushDeer
+
+pushdeer = PushDeer(pushkey="PDU20739T7ZemNBLmqiMV8CYNKUm665tYsoAshLKo")
 
 
-def send_msg(title: str, content: str) -> None:
+def sendTradePosMsg(custom_symbol: str, symbol: str, direction: bool, pos: int,
+                    price: float, t_time: str):
+    if direction:
+        dir_str = '开仓'
+    else:
+        dir_str = '平仓'
+    title = f'## {custom_symbol} {dir_str}'
+    content = (f'{t_time} **{symbol}** {dir_str} **{pos}** 手，价格 **¥{price}**')
+    sendPushDeerMsg(title, content)
+
+
+def sendSystemStartupMsg(s_time: datetime):
+    title = f'## {get_date_str_short(s_time)} 主策略启动'
+    content = f'启动时间: **{get_date_str(s_time)}**'
+    sendPushDeerMsg(title, content)
+
+
+def sendPushDeerMsg(title: str, content: str):
+    pushdeer.send_markdown(title, desp=content)
+
+
+def send_wechat_msg(title: str, content: str) -> None:
     ''' 使用 Server Chan 发送相关消息。
     参考地址：https://sct.ftqq.com/after
     '''

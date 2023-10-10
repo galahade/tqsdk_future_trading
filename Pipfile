@@ -8,6 +8,7 @@ tqsdk = "*"
 pyyaml = "*"
 pymongo = "*"
 pytz = "*"
+pypushdeer = "*"
 
 [dev-packages]
 pytest = "*"
